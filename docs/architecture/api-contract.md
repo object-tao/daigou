@@ -134,5 +134,34 @@
 ## 物流
 
 - `GET /api/logistics/lines`
+
+## Full MVP Extensions
+
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `POST /api/auth/logout`
+- `GET /api/auth/me`
+- `GET /api/public/pricing`
+- `GET /sitemap.xml`
+- `GET /robots.txt`
+- `GET /api/member/growth`
+- `POST /api/auction/orders`
+- `POST /api/cart/items`
+- `POST /api/cart/checkout`
+- `POST /api/value-added-services`
+- `POST /api/shipments/:id/pay-freight`
+- `POST /api/aftersales/requests`
+- `POST /api/packages/:id/claim`
+- `POST /api/points/redemptions`
+- `POST /api/coupons/redeem`
+- `POST /api/member/notification-preferences`
+- `POST /api/admin/auction/orders/:id/resolve`
+- `POST /api/admin/shipments/:id/freight-quotes`
+- `POST /api/admin/aftersales/:id/review`
+- `POST /api/admin/warehouse/destroy-expired-ownerless`
+- `POST /api/admin/translations`
+- `POST /api/admin/seo`
+- `GET /api/admin/export/:report.csv`
+- `POST /api/attachments`
 - 來源：共享領域模型。
 - 後續可切換至 D1 `logistics_channel_configs`。

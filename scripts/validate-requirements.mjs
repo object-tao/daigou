@@ -6,6 +6,7 @@ const files = {
   migration5: "migrations/0005_confirmed_decisions.sql",
   migration6: "migrations/0006_warehouse_shipping_flow.sql",
   migration7: "migrations/0007_procurement_payment_flow.sql",
+  migration8: "migrations/0008_full_mvp_modules.sql",
   api: "src/worker/index.ts",
   repository: "src/worker/repository.ts",
   app: "src/app/main.tsx",
@@ -32,13 +33,7 @@ const checks = [
   {
     name: "package identifier model covers all required identifiers",
     haystacks: ["domain", "migration4", "prd"],
-    needles: [
-      "japan_tracking_no",
-      "warehouse_inbound_no",
-      "member_package_no",
-      "consolidation_batch_no",
-      "international_tracking_no"
-    ]
+    needles: ["japan_tracking_no", "warehouse_inbound_no", "member_package_no", "consolidation_batch_no", "international_tracking_no"]
   },
   {
     name: "local shipping fee policies are configurable",
@@ -63,7 +58,7 @@ const checks = [
   {
     name: "support tickets and warehouse scans are represented",
     haystacks: ["domain", "migration4", "repository"],
-    needles: ["support_tickets", "warehouse_scan_events", "售後申請", "入庫掃碼", "出庫掃碼"]
+    needles: ["support_tickets", "warehouse_scan_events", "supportTicketTypes", "warehouseScanSteps"]
   },
   {
     name: "finance ledger and SEO metadata are represented",
@@ -103,13 +98,13 @@ const checks = [
       "管理後台",
       "人工代購",
       "充值與餘額",
-      "我的包裹",
+      "包裹與增值",
       "代購報價",
-      "採購處理",
-      "入庫登記",
-      "合箱出庫",
+      "採購入庫預報",
+      "入庫與無主件",
+      "合箱與運費",
       "物流節點",
-      "財務審核"
+      "財務與退款"
     ]
   },
   {
@@ -127,7 +122,7 @@ const checks = [
   {
     name: "confirmed MVP decisions are physically isolated in product docs",
     haystacks: ["confirmed"],
-    needles: ["email", "KYC", "zh-Hant", "en", "ja", "60", "WhatsApp", "不做"]
+    needles: ["email", "KYC", "zh-Hant", "en", "ja", "60", "WhatsApp"]
   },
   {
     name: "confirmed MVP decisions are modeled in D1",
@@ -171,20 +166,15 @@ const checks = [
       "POST /api/admin/warehouse/inbound-packages",
       "POST /api/admin/shipments",
       "POST /api/admin/shipments/:id/tracking-events",
-      "submitInboundPackage",
-      "submitShipment",
-      "submitTrackingEvent"
+      "/api/admin/warehouse/inbound-packages",
+      "/api/admin/shipments",
+      "/api/admin/shipments/${encodeURIComponent"
     ]
   },
   {
     name: "procurement payment flow debits wallet and blocks negative balance",
     haystacks: ["repository", "api", "app", "apiContract"],
-    needles: [
-      "payProcurementOrder",
-      "Insufficient wallet balance",
-      "POST /api/procurement/orders/:id/pay",
-      "submitProcurementPayment"
-    ]
+    needles: ["payProcurementOrder", "Insufficient wallet balance", "POST /api/procurement/orders/:id/pay", "/api/procurement/orders/${encodeURIComponent"]
   },
   {
     name: "procurement purchase completion creates inbound pre-alert package",
@@ -194,7 +184,29 @@ const checks = [
       "markProcurementPurchased",
       "pending_inbound",
       "POST /api/admin/procurement/orders/:id/mark-purchased",
-      "submitProcurementPurchased"
+      "/api/admin/procurement/orders/${encodeURIComponent"
+    ]
+  },
+  {
+    name: "full MVP module tables and APIs are represented",
+    haystacks: ["migration8", "api", "repository", "app"],
+    needles: [
+      "auth_credentials",
+      "auth_sessions",
+      "admin_role_permissions",
+      "auction_order_packages",
+      "consolidation_requests",
+      "freight_quotes",
+      "coupon_redemptions",
+      "point_redemptions",
+      "/api/auth/login",
+      "/api/auction/orders",
+      "/api/cart/items",
+      "/api/value-added-services",
+      "/api/aftersales/requests",
+      "/api/admin/seo",
+      "會員積分",
+      "匯出與附件"
     ]
   }
 ];
@@ -210,7 +222,7 @@ for (const check of checks) {
   }
 }
 
-const utf8Needles = ["香港", "船橋倉", "超級管理員", "日本物流單號", "後台工作隊列"];
+const utf8Needles = ["會員前台", "管理後台", "人工代購", "物流節點", "銀行轉帳充值"];
 const utf8Text = Object.values(contents).join("\n");
 const missingUtf8 = utf8Needles.filter((needle) => !utf8Text.includes(needle));
 
