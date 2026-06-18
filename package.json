@@ -11,7 +11,8 @@
     "worker:dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "db:migrate:local": "wrangler d1 migrations apply droppilot-db --local",
-    "db:migrate:remote": "wrangler d1 migrations apply droppilot-db --remote"
+    "db:migrate:remote": "wrangler d1 migrations apply droppilot-db --remote",
+    "setup:production": "powershell -ExecutionPolicy Bypass -File scripts/setup-production.ps1"
   },
   "dependencies": {
     "hono": "^4.8.0",
