@@ -42,13 +42,29 @@ type WorkQueue = {
   scans: Array<{ id: string; packageId: string; step: string; code: string; location: string | null }>;
   ledger: Array<{ id: string; bucket: string; direction: string; amountHkd: number; amountJpy: number; source: string }>;
   seo: Array<{ entityType: string; entityId: string; locale: string; title: string; urlSlug: string }>;
+  shipments: Array<{
+    id: string;
+    lineCode: string;
+    status: string;
+    trackingNo: string | null;
+    packageCount: number;
+  }>;
+  trackingEvents: Array<{
+    id: string;
+    shipmentId: string;
+    status: string;
+    location: string | null;
+    description: string;
+  }>;
 };
 
 const emptyWorkQueue: WorkQueue = {
   tickets: [],
   scans: [],
   ledger: [],
-  seo: []
+  seo: [],
+  shipments: [],
+  trackingEvents: []
 };
 
 const memberFlows = [
@@ -212,6 +228,83 @@ function App() {
     }
   }
 
+  async function submitInboundPackage(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    setSubmitting(true);
+    setNotice("Receiving inbound package...");
+
+    try {
+      const result = await postJson<{ id: string; status: string; ownerStatus: string }>(
+        "/api/admin/warehouse/inbound-packages",
+        {
+          memberId: String(form.get("memberId") ?? ""),
+          warehouseId: String(form.get("warehouseId") ?? "warehouse-funabashi"),
+          trackingNo: String(form.get("trackingNo") ?? ""),
+          weightGram: Number(form.get("weightGram") ?? 0),
+          volumeCm3: Number(form.get("volumeCm3") ?? 0)
+        }
+      );
+      setNotice(`入庫包裹已建立：${result.id} / ${result.ownerStatus}`);
+      event.currentTarget.reset();
+      await refreshData();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "入庫失敗");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function submitShipment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    setSubmitting(true);
+    setNotice("Creating shipment...");
+
+    try {
+      const result = await postJson<{ id: string; status: string; packageCount: number }>("/api/admin/shipments", {
+        packageIds: String(form.get("packageIds") ?? ""),
+        lineCode: String(form.get("lineCode") ?? ""),
+        cartonFeeHkd: Number(form.get("cartonFeeHkd") ?? 0),
+        freightFeeHkd: Number(form.get("freightFeeHkd") ?? 0)
+      });
+      setNotice(`發貨單已建立：${result.id}，包裹 ${result.packageCount} 件`);
+      event.currentTarget.reset();
+      await refreshData();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "發貨單建立失敗");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function submitTrackingEvent(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const shipmentId = String(form.get("shipmentId") ?? "").trim();
+    setSubmitting(true);
+    setNotice("Adding tracking event...");
+
+    try {
+      const result = await postJson<{ id: string; shipmentStatus: string }>(
+        `/api/admin/shipments/${encodeURIComponent(shipmentId)}/tracking-events`,
+        {
+          status: String(form.get("status") ?? ""),
+          location: String(form.get("location") ?? ""),
+          description: String(form.get("description") ?? ""),
+          trackingNo: String(form.get("trackingNo") ?? "")
+        }
+      );
+      setNotice(`物流節點已新增：${result.id}，發貨單狀態 ${result.shipmentStatus}`);
+      event.currentTarget.reset();
+      await refreshData();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "物流節點新增失敗");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   return (
     <main className="shell">
       <aside className="sidebar" aria-label="主導航">
@@ -325,6 +418,52 @@ function App() {
                 <input name="relatedType" placeholder="關聯類型，例如 package" />
                 <input name="relatedId" placeholder="關聯編號，例如 DP-PK-10003" />
                 <button disabled={submitting} type="submit">提交工單</button>
+              </form>
+            </div>
+          </div>
+
+          <div className="panel main-panel" id="warehouse-actions">
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">Warehouse Actions</p>
+                <h2>後台倉庫操作</h2>
+              </div>
+              <Boxes size={22} />
+            </div>
+            <div className="form-grid">
+              <form onSubmit={submitInboundPackage}>
+                <h3>入庫登記</h3>
+                <input name="memberId" placeholder="會員 ID；無主包裹可留空" defaultValue="demo-member" />
+                <input name="warehouseId" placeholder="倉庫 ID" defaultValue="warehouse-funabashi" />
+                <input name="trackingNo" placeholder="日本物流單號" required />
+                <input name="weightGram" type="number" min="0" placeholder="重量 g" />
+                <input name="volumeCm3" type="number" min="0" placeholder="體積 cm3" />
+                <button disabled={submitting} type="submit">登記入庫</button>
+              </form>
+              <form onSubmit={submitShipment}>
+                <h3>建立合箱發貨單</h3>
+                <input name="packageIds" placeholder="包裹 ID，逗號分隔；先入庫後再填入" required />
+                <input name="lineCode" placeholder="線路代碼" defaultValue="HK-AIR-STANDARD" required />
+                <input name="cartonFeeHkd" type="number" min="0" placeholder="紙箱費 HKD" defaultValue="15" />
+                <input name="freightFeeHkd" type="number" min="0" placeholder="國際運費 HKD" />
+                <button disabled={submitting} type="submit">建立發貨單</button>
+              </form>
+              <form onSubmit={submitTrackingEvent}>
+                <h3>新增物流節點</h3>
+                <input name="shipmentId" placeholder="發貨單 ID" defaultValue={workQueue.shipments[0]?.id ?? "DP-SH-10001"} required />
+                <select name="status" defaultValue="outbound" required>
+                  <option value="packed">已打包</option>
+                  <option value="outbound">已出庫</option>
+                  <option value="departed_by_air_or_sea">已上飛機/船</option>
+                  <option value="arrived_port">到港</option>
+                  <option value="customs_clearance">清關</option>
+                  <option value="delivery">派送</option>
+                  <option value="signed">簽收</option>
+                </select>
+                <input name="location" placeholder="地點" defaultValue="Funabashi" />
+                <input name="trackingNo" placeholder="國際物流號" />
+                <textarea name="description" placeholder="節點描述" defaultValue="Package moved to next logistics step." required />
+                <button disabled={submitting} type="submit">新增節點</button>
               </form>
             </div>
           </div>
@@ -531,6 +670,22 @@ function App() {
               <div>
                 <strong>SEO</strong>
                 <span>{workQueue.seo[0] ? `${workQueue.seo[0].title} · /${workQueue.seo[0].urlSlug}` : "No SEO entry"}</span>
+              </div>
+              <div>
+                <strong>Shipments</strong>
+                <span>
+                  {workQueue.shipments[0]
+                    ? `${workQueue.shipments[0].id} · ${workQueue.shipments[0].status} · ${workQueue.shipments[0].packageCount}件`
+                    : "No shipment"}
+                </span>
+              </div>
+              <div>
+                <strong>Tracking</strong>
+                <span>
+                  {workQueue.trackingEvents[0]
+                    ? `${workQueue.trackingEvents[0].shipmentId} · ${workQueue.trackingEvents[0].status}`
+                    : "No tracking event"}
+                </span>
               </div>
             </div>
           </div>

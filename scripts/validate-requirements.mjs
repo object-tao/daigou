@@ -4,6 +4,7 @@ const files = {
   domain: "src/shared/domain.ts",
   migration4: "migrations/0004_response2_operational_rules.sql",
   migration5: "migrations/0005_confirmed_decisions.sql",
+  migration6: "migrations/0006_warehouse_shipping_flow.sql",
   api: "src/worker/index.ts",
   repository: "src/worker/repository.ts",
   app: "src/app/main.tsx",
@@ -137,6 +138,23 @@ const checks = [
     name: "notification MVP excludes email and WhatsApp sending",
     haystacks: ["domain", "migration5", "confirmed"],
     needles: ["emailNotifications: false", "whatsappAddon: false", "email_mvp", "whatsapp_mvp"]
+  },
+  {
+    name: "warehouse shipment flow links packages to shipments",
+    haystacks: ["migration6", "repository", "apiContract"],
+    needles: ["shipment_packages", "createShipmentFromPackages", "receiveInboundPackage", "addShipmentTrackingEvent"]
+  },
+  {
+    name: "API exposes warehouse and logistics write actions",
+    haystacks: ["api", "apiContract", "app"],
+    needles: [
+      "POST /api/admin/warehouse/inbound-packages",
+      "POST /api/admin/shipments",
+      "POST /api/admin/shipments/:id/tracking-events",
+      "submitInboundPackage",
+      "submitShipment",
+      "submitTrackingEvent"
+    ]
   }
 ];
 

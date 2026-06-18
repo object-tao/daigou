@@ -101,6 +101,24 @@
 - 用途：財務審核銀行轉帳充值，入帳到會員港幣餘額。
 - 寫入：`payment_requests`、`wallets`、`financial_ledger_entries`、`audit_logs`。
 
+- `POST /api/admin/warehouse/inbound-packages`
+- 用途：倉庫人員登記日本包裹入庫；有會員 ID 時自動標記已識別，無會員 ID 時進入無主包裹池。
+- 必填：`trackingNo`。
+- 可選：`memberId`、`warehouseId`、`weightGram`、`volumeCm3`。
+- 寫入：`inbound_packages`、`warehouse_scan_events`、`package_identifiers`、`audit_logs`。
+
+- `POST /api/admin/shipments`
+- 用途：後台將一個或多個已識別包裹建立為合箱發貨單。
+- 必填：`packageIds`、`lineCode`。
+- 可選：`cartonFeeHkd`、`freightFeeHkd`。
+- 寫入：`shipments`、`shipment_packages`、`logistics_tracking_events`、`audit_logs`。
+
+- `POST /api/admin/shipments/:id/tracking-events`
+- 用途：自建物流線路追加物流節點並同步發貨單狀態。
+- 必填：`status`、`description`。
+- 可選：`location`、`occurredAt`、`trackingNo`。
+- 寫入：`logistics_tracking_events`、`shipments`、`audit_logs`。
+
 ## 物流
 
 - `GET /api/logistics/lines`

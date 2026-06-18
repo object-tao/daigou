@@ -11,7 +11,9 @@ import {
   workflowStates
 } from "../shared/domain";
 import {
+  addShipmentTrackingEvent,
   approvePaymentRequest,
+  createShipmentFromPackages,
   createPaymentRequest,
   createProcurementOrder,
   createSupportTicket,
@@ -20,7 +22,8 @@ import {
   getMemberOrders,
   getMemberProfile,
   getOperationalRules,
-  quoteProcurementOrder
+  quoteProcurementOrder,
+  receiveInboundPackage
 } from "./repository";
 
 type Bindings = Env;
@@ -41,6 +44,23 @@ function textField(body: Record<string, unknown>, field: string): string | null 
 function numberField(body: Record<string, unknown>, field: string): number | null {
   const value = body[field];
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function stringArrayField(body: Record<string, unknown>, field: string): string[] {
+  const value = body[field];
+
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+  }
+
+  if (typeof value === "string") {
+    return value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return [];
 }
 
 async function readJsonBody(c: Context<{ Bindings: Bindings }>) {
@@ -224,6 +244,96 @@ app.post("/api/admin/payments/:id/approve", async (c) => {
     return c.json(result);
   } catch (error) {
     return c.json({ error: error instanceof Error ? error.message : "Approval failed" }, 400);
+  }
+});
+
+app.post("/api/admin/warehouse/inbound-packages", async (c) => {
+  const body = await readJsonBody(c);
+
+  if (!body) {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+
+  const memberId = textField(body, "memberId") ?? undefined;
+  const warehouseId = textField(body, "warehouseId") ?? undefined;
+  const trackingNo = textField(body, "trackingNo") ?? undefined;
+  const weightGram = numberField(body, "weightGram");
+  const volumeCm3 = numberField(body, "volumeCm3");
+
+  try {
+    const result = await receiveInboundPackage(c.env.DB, {
+      memberId,
+      warehouseId,
+      trackingNo,
+      weightGram,
+      volumeCm3
+    });
+
+    return c.json(result, 201);
+  } catch (error) {
+    return c.json({ error: error instanceof Error ? error.message : "Inbound package failed" }, 400);
+  }
+});
+
+app.post("/api/admin/shipments", async (c) => {
+  const body = await readJsonBody(c);
+
+  if (!body) {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+
+  const packageIds = stringArrayField(body, "packageIds");
+  const lineCode = textField(body, "lineCode");
+  const cartonFeeHkd = numberField(body, "cartonFeeHkd") ?? 0;
+  const freightFeeHkd = numberField(body, "freightFeeHkd");
+
+  if (packageIds.length === 0 || !lineCode) {
+    return c.json({ error: "packageIds and lineCode are required" }, 400);
+  }
+
+  try {
+    const result = await createShipmentFromPackages(c.env.DB, {
+      packageIds,
+      lineCode,
+      cartonFeeHkd,
+      freightFeeHkd
+    });
+
+    return c.json(result, 201);
+  } catch (error) {
+    return c.json({ error: error instanceof Error ? error.message : "Shipment creation failed" }, 400);
+  }
+});
+
+app.post("/api/admin/shipments/:id/tracking-events", async (c) => {
+  const body = await readJsonBody(c);
+
+  if (!body) {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+
+  const status = textField(body, "status");
+  const description = textField(body, "description");
+  const location = textField(body, "location") ?? undefined;
+  const occurredAt = textField(body, "occurredAt") ?? undefined;
+  const trackingNo = textField(body, "trackingNo") ?? undefined;
+
+  if (!status || !description) {
+    return c.json({ error: "status and description are required" }, 400);
+  }
+
+  try {
+    const result = await addShipmentTrackingEvent(c.env.DB, c.req.param("id"), {
+      status,
+      description,
+      location,
+      occurredAt,
+      trackingNo
+    });
+
+    return c.json(result, 201);
+  } catch (error) {
+    return c.json({ error: error instanceof Error ? error.message : "Tracking event failed" }, 400);
   }
 });
 

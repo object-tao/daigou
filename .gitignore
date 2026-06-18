@@ -13,3 +13,4 @@ yarn-error.log*
 pnpm-debug.log*
 dev-server.*.log
 worker-dev.*.log
+worker-preview.*.log

@@ -183,6 +183,27 @@ type SeoEntryRow = {
   robots_directive: string;
 };
 
+type ShipmentRow = {
+  id: string;
+  member_id: string;
+  line_code: string;
+  status: string;
+  carton_fee_hkd: number;
+  freight_fee_hkd: number | null;
+  tracking_no: string | null;
+  updated_at: string;
+  package_count: number;
+};
+
+type TrackingEventRow = {
+  id: string;
+  shipment_id: string;
+  status: string;
+  location: string | null;
+  description: string;
+  occurred_at: string;
+};
+
 type PaymentRequestRow = {
   id: string;
   member_id: string;
@@ -223,6 +244,29 @@ export type QuoteProcurementInput = {
   remarks?: string;
 };
 
+export type ReceiveInboundPackageInput = {
+  memberId?: string;
+  warehouseId?: string;
+  trackingNo?: string;
+  weightGram?: number | null;
+  volumeCm3?: number | null;
+};
+
+export type CreateShipmentInput = {
+  packageIds: string[];
+  lineCode: string;
+  cartonFeeHkd: number;
+  freightFeeHkd?: number | null;
+};
+
+export type CreateTrackingEventInput = {
+  status: string;
+  location?: string;
+  description: string;
+  occurredAt?: string;
+  trackingNo?: string;
+};
+
 async function first<T>(db: D1Database, sql: string, ...binds: D1Value[]): Promise<T | null> {
   return db.prepare(sql).bind(...binds).first<T>();
 }
@@ -251,6 +295,26 @@ function parseJsonValue(value: string): unknown {
   } catch {
     return value;
   }
+}
+
+function dateAfterDays(days: number): string {
+  const date = new Date();
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function shipmentStatusFromTrackingEvent(status: string): string {
+  const statuses: Record<string, string> = {
+    packed: "packing",
+    outbound: "outbound",
+    departed_by_air_or_sea: "in_transit",
+    arrived_port: "in_transit",
+    customs_clearance: "in_transit",
+    delivery: "in_transit",
+    signed: "signed"
+  };
+
+  return statuses[status] ?? "in_transit";
 }
 
 async function writeAuditLog(
@@ -644,6 +708,30 @@ export async function getAdminWorkQueue(db: D1Database) {
         ORDER BY updated_at DESC
         LIMIT 10`
     );
+    const shipments = await all<ShipmentRow>(
+      db,
+      `SELECT shipments.id,
+              shipments.member_id,
+              shipments.line_code,
+              shipments.status,
+              shipments.carton_fee_hkd,
+              shipments.freight_fee_hkd,
+              shipments.tracking_no,
+              shipments.updated_at,
+              COUNT(shipment_packages.package_id) AS package_count
+         FROM shipments
+         LEFT JOIN shipment_packages ON shipment_packages.shipment_id = shipments.id
+        GROUP BY shipments.id
+        ORDER BY shipments.updated_at DESC
+        LIMIT 10`
+    );
+    const trackingEvents = await all<TrackingEventRow>(
+      db,
+      `SELECT id, shipment_id, status, location, description, occurred_at
+         FROM logistics_tracking_events
+        ORDER BY occurred_at DESC
+        LIMIT 10`
+    );
 
     return {
       tickets: tickets.map((ticket) => ({
@@ -681,6 +769,25 @@ export async function getAdminWorkQueue(db: D1Database) {
         urlSlug: entry.url_slug,
         sitemapEnabled: entry.sitemap_enabled === 1,
         robotsDirective: entry.robots_directive
+      })),
+      shipments: shipments.map((shipment) => ({
+        id: shipment.id,
+        memberId: shipment.member_id,
+        lineCode: shipment.line_code,
+        status: shipment.status,
+        cartonFeeHkd: shipment.carton_fee_hkd,
+        freightFeeHkd: shipment.freight_fee_hkd,
+        trackingNo: shipment.tracking_no,
+        packageCount: shipment.package_count,
+        updatedAt: shipment.updated_at
+      })),
+      trackingEvents: trackingEvents.map((event) => ({
+        id: event.id,
+        shipmentId: event.shipment_id,
+        status: event.status,
+        location: event.location,
+        description: event.description,
+        occurredAt: event.occurred_at
       }))
     };
   } catch {
@@ -688,7 +795,9 @@ export async function getAdminWorkQueue(db: D1Database) {
       tickets: [],
       scans: [],
       ledger: [],
-      seo: []
+      seo: [],
+      shipments: [],
+      trackingEvents: []
     };
   }
 }
@@ -787,6 +896,244 @@ export async function createSupportTicket(
   return {
     id,
     status: "open"
+  };
+}
+
+export async function receiveInboundPackage(
+  db: D1Database,
+  input: ReceiveInboundPackageInput,
+  staffId = "staff-admin-demo"
+) {
+  const id = createId("DP-PK");
+  const memberId = input.memberId?.trim() || null;
+  const warehouseId = input.warehouseId?.trim() || "warehouse-funabashi";
+  const trackingNo = input.trackingNo?.trim() || null;
+  const ownerStatus = memberId ? "identified" : "ownerless_pool";
+  const freeStorageUntil = memberId ? dateAfterDays(30) : null;
+
+  await run(
+    db,
+    `INSERT INTO inbound_packages (
+      id, member_id, warehouse_id, tracking_no, status, owner_status, weight_gram, volume_cm3, free_storage_until
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    id,
+    memberId,
+    warehouseId,
+    trackingNo,
+    "received",
+    ownerStatus,
+    input.weightGram === null || input.weightGram === undefined ? null : Math.trunc(input.weightGram),
+    input.volumeCm3 === null || input.volumeCm3 === undefined ? null : Math.trunc(input.volumeCm3),
+    freeStorageUntil
+  );
+
+  await run(
+    db,
+    `INSERT INTO warehouse_scan_events (id, package_id, scan_step, scanned_code, staff_id, location)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    createId("scan"),
+    id,
+    "inbound_scan",
+    trackingNo ?? id,
+    staffId,
+    warehouseId
+  );
+
+  await run(
+    db,
+    `INSERT OR IGNORE INTO package_identifiers (id, package_id, identifier_type, identifier_value)
+     VALUES (?, ?, ?, ?)`,
+    createId("pkgid"),
+    id,
+    "warehouse_inbound_no",
+    id
+  );
+
+  if (trackingNo) {
+    await run(
+      db,
+      `INSERT OR IGNORE INTO package_identifiers (id, package_id, identifier_type, identifier_value)
+       VALUES (?, ?, ?, ?)`,
+      createId("pkgid"),
+      id,
+      "japan_tracking_no",
+      trackingNo
+    );
+  }
+
+  await writeAuditLog(db, "staff", staffId, "inbound_package.receive", "inbound_package", id, {
+    memberId,
+    warehouseId,
+    ownerStatus,
+    trackingNo
+  });
+
+  return {
+    id,
+    status: "received",
+    ownerStatus,
+    freeStorageUntil
+  };
+}
+
+export async function createShipmentFromPackages(
+  db: D1Database,
+  input: CreateShipmentInput,
+  staffId = "staff-admin-demo"
+) {
+  const packageIds = [...new Set(input.packageIds.map((id) => id.trim()).filter(Boolean))];
+
+  if (packageIds.length === 0) {
+    throw new Error("At least one package is required");
+  }
+
+  const placeholders = packageIds.map(() => "?").join(", ");
+  const packages = await all<{ id: string; member_id: string | null; status: string }>(
+    db,
+    `SELECT id, member_id, status FROM inbound_packages WHERE id IN (${placeholders})`,
+    ...packageIds
+  );
+
+  if (packages.length !== packageIds.length) {
+    throw new Error("One or more packages were not found");
+  }
+
+  const memberIds = [...new Set(packages.map((item) => item.member_id).filter(Boolean))];
+
+  if (memberIds.length !== 1) {
+    throw new Error("Packages must be identified and belong to one member");
+  }
+
+  const existingLinks = await all<{ package_id: string; shipment_id: string }>(
+    db,
+    `SELECT package_id, shipment_id FROM shipment_packages WHERE package_id IN (${placeholders})`,
+    ...packageIds
+  );
+
+  if (existingLinks.length > 0) {
+    throw new Error(`Package already belongs to shipment ${existingLinks[0].shipment_id}`);
+  }
+
+  const shipmentId = createId("DP-SH");
+  const cartonFeeHkd = Math.max(0, Math.trunc(input.cartonFeeHkd || 0));
+  const freightFeeHkd = input.freightFeeHkd === null || input.freightFeeHkd === undefined
+    ? null
+    : Math.max(0, Math.trunc(input.freightFeeHkd));
+
+  await run(
+    db,
+    `INSERT INTO shipments (id, member_id, line_code, status, carton_fee_hkd, freight_fee_hkd)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    shipmentId,
+    memberIds[0],
+    input.lineCode,
+    "packing",
+    cartonFeeHkd,
+    freightFeeHkd
+  );
+
+  for (const packageId of packageIds) {
+    await run(
+      db,
+      `INSERT INTO shipment_packages (id, shipment_id, package_id, added_by)
+       VALUES (?, ?, ?, ?)`,
+      createId("ship-pkg"),
+      shipmentId,
+      packageId,
+      staffId
+    );
+  }
+
+  await run(
+    db,
+    `UPDATE inbound_packages
+        SET status = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id IN (${placeholders})`,
+    "packing",
+    ...packageIds
+  );
+
+  await run(
+    db,
+    `INSERT INTO logistics_tracking_events (id, shipment_id, status, location, description, occurred_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    createId("track"),
+    shipmentId,
+    "packed",
+    "Funabashi warehouse",
+    "Shipment created from consolidated packages.",
+    new Date().toISOString()
+  );
+
+  await writeAuditLog(db, "staff", staffId, "shipment.create_from_packages", "shipment", shipmentId, {
+    packageIds,
+    lineCode: input.lineCode,
+    cartonFeeHkd,
+    freightFeeHkd
+  });
+
+  return {
+    id: shipmentId,
+    status: "packing",
+    packageCount: packageIds.length
+  };
+}
+
+export async function addShipmentTrackingEvent(
+  db: D1Database,
+  shipmentId: string,
+  input: CreateTrackingEventInput,
+  staffId = "staff-admin-demo"
+) {
+  const shipment = await first<{ id: string; status: string }>(
+    db,
+    "SELECT id, status FROM shipments WHERE id = ?",
+    shipmentId
+  );
+
+  if (!shipment) {
+    throw new Error("Shipment not found");
+  }
+
+  const eventId = createId("track");
+  const nextShipmentStatus = shipmentStatusFromTrackingEvent(input.status);
+  const occurredAt = input.occurredAt?.trim() || new Date().toISOString();
+
+  await run(
+    db,
+    `INSERT INTO logistics_tracking_events (id, shipment_id, status, location, description, occurred_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    eventId,
+    shipmentId,
+    input.status,
+    input.location?.trim() || null,
+    input.description,
+    occurredAt
+  );
+
+  await run(
+    db,
+    `UPDATE shipments
+        SET status = ?,
+            tracking_no = COALESCE(?, tracking_no),
+            updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?`,
+    nextShipmentStatus,
+    input.trackingNo?.trim() || null,
+    shipmentId
+  );
+
+  await writeAuditLog(db, "staff", staffId, "shipment.tracking_event.add", "shipment", shipmentId, {
+    eventId,
+    previousStatus: shipment.status,
+    nextStatus: nextShipmentStatus,
+    trackingEventStatus: input.status
+  });
+
+  return {
+    id: eventId,
+    shipmentId,
+    shipmentStatus: nextShipmentStatus
   };
 }
 
