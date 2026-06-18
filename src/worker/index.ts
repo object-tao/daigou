@@ -1,10 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import {
-  adminSummary,
   appLocales,
-  demoMember,
-  demoOrders,
   featureFlags,
   launchMarkets,
   logisticsLines,
@@ -12,6 +9,7 @@ import {
   serviceBlueprint,
   workflowStates
 } from "../shared/domain";
+import { getAdminSummary, getMemberOrders, getMemberProfile } from "./repository";
 
 type Bindings = Env;
 
@@ -65,11 +63,11 @@ app.get("/api/admin/workflows", (c) =>
   })
 );
 
-app.get("/api/member/me", (c) => c.json(demoMember));
+app.get("/api/member/me", async (c) => c.json(await getMemberProfile(c.env.DB)));
 
-app.get("/api/member/orders", (c) =>
+app.get("/api/member/orders", async (c) =>
   c.json({
-    items: demoOrders
+    items: await getMemberOrders(c.env.DB)
   })
 );
 
@@ -79,7 +77,7 @@ app.get("/api/logistics/lines", (c) =>
   })
 );
 
-app.get("/api/admin/summary", (c) => c.json(adminSummary));
+app.get("/api/admin/summary", async (c) => c.json(await getAdminSummary(c.env.DB)));
 
 app.notFound((c) => c.env.ASSETS.fetch(c.req.raw));
 
