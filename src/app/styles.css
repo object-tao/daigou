@@ -244,6 +244,28 @@ h3 {
   align-items: center;
 }
 
+.role-list {
+  display: grid;
+  gap: 10px;
+}
+
+.role-row {
+  border: 1px solid #e5ebf3;
+  border-radius: 8px;
+  padding: 12px;
+  display: grid;
+  gap: 4px;
+}
+
+.role-row strong {
+  color: #253853;
+}
+
+.role-row span {
+  color: #52657d;
+  line-height: 1.5;
+}
+
 .check-list,
 .timeline {
   padding-left: 20px;

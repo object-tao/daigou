@@ -5,16 +5,22 @@ import {
   Boxes,
   ChartNoAxesCombined,
   CircleDollarSign,
+  ClipboardList,
+  FileText,
   Gavel,
   Globe2,
   Home,
+  Languages,
+  LockKeyhole,
   PackageCheck,
   Search,
   Settings,
   ShieldCheck,
   ShoppingCart,
+  TicketPercent,
   Truck,
-  Users
+  Users,
+  WalletCards
 } from "lucide-react";
 import "./styles.css";
 
@@ -31,11 +37,11 @@ const metrics: Metric[] = [
   { label: "退款審核", value: "3", tone: "red" }
 ];
 
-const memberTasks = [
-  { icon: ShoppingCart, title: "代購購物車", text: "跨平台商品合併提交，保留備註與日本本地運費後補。" },
-  { icon: Gavel, title: "Yahoo 代拍", text: "會員設定最高出價，客服按授權範圍人工執行。" },
-  { icon: Boxes, title: "集運合箱", text: "船橋倉最終出發，免運合箱，紙箱費另計。" },
-  { icon: PackageCheck, title: "一件直發", text: "單件貨提醒轉入出庫打包區，減少上架等待。" }
+const memberFlows = [
+  { icon: ShoppingCart, title: "代購購物車", text: "Mercari、Rakuma、Amazon Japan 及線下商品可合併提交，保留備註與日本本地運費後補。" },
+  { icon: Gavel, title: "Yahoo 人工代拍", text: "會員設定最高出價與扣款授權，客服在授權範圍內人工出價，超額觸發確認。" },
+  { icon: Boxes, title: "集運與合箱", text: "船橋倉作為最終出發倉，免運合箱，紙箱費與超材處理由後台計費。" },
+  { icon: PackageCheck, title: "一件直發", text: "單件貨不需上架等待時，自動提醒轉入出庫打包區等待發運。" }
 ];
 
 const adminModules = [
@@ -47,10 +53,21 @@ const adminModules = [
   "代購訂單",
   "代拍訂單",
   "倉庫包裹",
+  "無主公海",
   "增值服務",
   "優惠券",
   "翻譯管理",
-  "操作日誌"
+  "字典管理",
+  "操作日誌",
+  "報表匯出",
+  "售後審核"
+];
+
+const roleRows = [
+  ["客服", "報價、會員溝通、售後申請、通知發送"],
+  ["倉庫", "入庫、合箱、出庫、一件直發、增值服務"],
+  ["財務", "銀行轉帳、人工匯率、餘額調整、退款"],
+  ["營運", "團購、優惠券、會員等級、多語內容"]
 ];
 
 function App() {
@@ -77,8 +94,8 @@ function App() {
       <section className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">繁體中文優先 · 港幣結算 · 不面向中國大陸用戶</p>
-            <h1>會員 H5 與營運後台一體化工作台</h1>
+            <p className="eyebrow">繁體中文優先 · 港幣結算 · Cloudflare 部署</p>
+            <h1>面向香港用戶的日本代購、代拍、集運營運系統</h1>
           </div>
           <div className="actions">
             <button aria-label="搜尋"><Search size={19} /></button>
@@ -100,12 +117,12 @@ function App() {
             <div className="panel-heading">
               <div>
                 <p className="eyebrow">Member Journey</p>
-                <h2>會員核心流程</h2>
+                <h2>會員端 MVP 流程</h2>
               </div>
               <Globe2 size={22} />
             </div>
             <div className="task-grid">
-              {memberTasks.map((task) => (
+              {memberFlows.map((task) => (
                 <article className="task" key={task.title}>
                   <task.icon size={21} />
                   <h3>{task.title}</h3>
@@ -115,23 +132,23 @@ function App() {
             </div>
           </div>
 
-          <div className="panel">
+          <div className="panel" id="finance">
             <div className="panel-heading">
               <div>
                 <p className="eyebrow">Finance</p>
-                <h2>支付與餘額</h2>
+                <h2>支付、匯率與餘額</h2>
               </div>
-              <CircleDollarSign size={22} />
+              <WalletCards size={22} />
             </div>
             <ul className="check-list">
-              <li>前期銀行轉帳，人工審核入帳</li>
-              <li>港幣充值，按人工匯率折算日元成本</li>
-              <li>授權範圍內自動扣款，超額觸發確認</li>
-              <li>佣金按營收百分比回充至餘額</li>
+              <li>前期銀行轉帳，財務人工審核入帳。</li>
+              <li>港幣充值，人工匯率折算日元成本。</li>
+              <li>授權範圍內自動扣款，超額轉確認。</li>
+              <li>佣金按營收百分比回充至會員餘額。</li>
             </ul>
           </div>
 
-          <div className="panel">
+          <div className="panel" id="warehouse">
             <div className="panel-heading">
               <div>
                 <p className="eyebrow">Warehouse</p>
@@ -165,26 +182,83 @@ function App() {
           <div className="panel">
             <div className="panel-heading">
               <div>
-                <p className="eyebrow">Growth</p>
-                <h2>會員推薦與積分</h2>
+                <p className="eyebrow">Roles</p>
+                <h2>多角色權限</h2>
               </div>
               <Users size={22} />
             </div>
+            <div className="role-list">
+              {roleRows.map(([role, scope]) => (
+                <div className="role-row" key={role}>
+                  <strong>{role}</strong>
+                  <span>{scope}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="panel">
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">Growth</p>
+                <h2>會員推薦與積分</h2>
+              </div>
+              <TicketPercent size={22} />
+            </div>
             <p className="body-text">
-              支援五級會員、推薦佣金、代購商品積分與物流費用積分。積分兌換以公司提供商品為主，規則保留後台配置。
+              支援五級會員、推薦佣金、代購商品積分與物流費用積分。積分兌換以公司提供商品為主，開團者獎勵和優惠券限制由後台配置。
             </p>
           </div>
 
           <div className="panel">
             <div className="panel-heading">
               <div>
-                <p className="eyebrow">Data</p>
-                <h2>統計與審計</h2>
+                <p className="eyebrow">Content</p>
+                <h2>多語與 SEO</h2>
               </div>
-              <ChartNoAxesCombined size={22} />
+              <Languages size={22} />
             </div>
             <p className="body-text">
-              後台操作全量記錄審計日誌，報表先提供 CSV/Excel 匯出接口，後續按財務、倉庫、客服維度擴展。
+              前台與後台內容保留繁體中文、英文、日文翻譯管理。H5 先做好語義標題、描述和可索引內容，後續按商品與物流頁補結構化資料。
+            </p>
+          </div>
+
+          <div className="panel">
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">Security</p>
+                <h2>安全與審計</h2>
+              </div>
+              <LockKeyhole size={22} />
+            </div>
+            <p className="body-text">
+              身份圖片、付款憑證和包裹照片後續放私有 R2，資料庫只存引用。後台操作全量寫入審計日誌，支持按人員、對象與動作追查。
+            </p>
+          </div>
+
+          <div className="panel">
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">Reports</p>
+                <h2>報表與遷移</h2>
+              </div>
+              <FileText size={22} />
+            </div>
+            <p className="body-text">
+              首期提供 CSV/Excel 匯出接口邊界；舊系統資料遷移需先盤點會員、餘額、訂單、包裹、圖片和交易流水。
+            </p>
+          </div>
+
+          <div className="panel">
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">Operations</p>
+                <h2>自動刷新策略</h2>
+              </div>
+              <ClipboardList size={22} />
+            </div>
+            <p className="body-text">
+              MVP 以服務端排程和列表輪詢為主，待訂單量與客服使用節奏穩定後再引入 WebSocket 或 SSE。
             </p>
           </div>
         </section>
