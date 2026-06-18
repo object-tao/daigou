@@ -222,6 +222,19 @@ const checks = [
       "聯繫我們",
       "商品搜索"
     ]
+  },
+  {
+    name: "anonymous consumer homepage is represented",
+    haystacks: ["app", "app"],
+    needles: [
+      "home-shell",
+      "HomePage",
+      "每日推送",
+      "專題推送",
+      "platform-card",
+      "category-strip",
+      "home-footer"
+    ]
   }
 ];
 
