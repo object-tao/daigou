@@ -228,6 +228,54 @@ function App() {
     }
   }
 
+  async function submitProcurementPayment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const orderId = String(form.get("orderId") ?? "").trim();
+    setSubmitting(true);
+    setNotice("Paying procurement order...");
+
+    try {
+      const result = await postJson<{ id: string; status: string; payableHkd: number; balanceAfterHkd: number }>(
+        `/api/procurement/orders/${encodeURIComponent(orderId)}/pay`,
+        {}
+      );
+      setNotice(`代購已付款：${result.id}，扣款 HKD ${result.payableHkd}，餘額 HKD ${result.balanceAfterHkd}`);
+      event.currentTarget.reset();
+      await refreshData();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "代購付款失敗");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function submitProcurementPurchased(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const orderId = String(form.get("orderId") ?? "").trim();
+    setSubmitting(true);
+    setNotice("Marking procurement order purchased...");
+
+    try {
+      const result = await postJson<{ id: string; status: string; packageId: string }>(
+        `/api/admin/procurement/orders/${encodeURIComponent(orderId)}/mark-purchased`,
+        {
+          japanTrackingNo: String(form.get("japanTrackingNo") ?? ""),
+          warehouseId: String(form.get("warehouseId") ?? "warehouse-funabashi"),
+          remarks: String(form.get("remarks") ?? "")
+        }
+      );
+      setNotice(`代購已採購：${result.id}，入庫預報 ${result.packageId}`);
+      event.currentTarget.reset();
+      await refreshData();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "標記採購失敗");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   async function submitInboundPackage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -418,6 +466,31 @@ function App() {
                 <input name="relatedType" placeholder="關聯類型，例如 package" />
                 <input name="relatedId" placeholder="關聯編號，例如 DP-PK-10003" />
                 <button disabled={submitting} type="submit">提交工單</button>
+              </form>
+            </div>
+          </div>
+
+          <div className="panel main-panel" id="procurement-flow">
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">Procurement Flow</p>
+                <h2>代購付款與採購入庫預報</h2>
+              </div>
+              <PackageCheck size={22} />
+            </div>
+            <div className="form-grid two">
+              <form onSubmit={submitProcurementPayment}>
+                <h3>會員支付代購單</h3>
+                <input name="orderId" placeholder="代購訂單 ID" defaultValue="DP-PO-10001" required />
+                <button disabled={submitting} type="submit">餘額付款</button>
+              </form>
+              <form onSubmit={submitProcurementPurchased}>
+                <h3>後台標記已採購</h3>
+                <input name="orderId" placeholder="代購訂單 ID" defaultValue="DP-PO-10001" required />
+                <input name="japanTrackingNo" placeholder="日本物流單號；可後補" />
+                <input name="warehouseId" placeholder="預計入庫倉" defaultValue="warehouse-funabashi" />
+                <textarea name="remarks" placeholder="採購備註" />
+                <button disabled={submitting} type="submit">生成入庫預報</button>
               </form>
             </div>
           </div>

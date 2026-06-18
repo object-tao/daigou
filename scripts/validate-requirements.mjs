@@ -5,6 +5,7 @@ const files = {
   migration4: "migrations/0004_response2_operational_rules.sql",
   migration5: "migrations/0005_confirmed_decisions.sql",
   migration6: "migrations/0006_warehouse_shipping_flow.sql",
+  migration7: "migrations/0007_procurement_payment_flow.sql",
   api: "src/worker/index.ts",
   repository: "src/worker/repository.ts",
   app: "src/app/main.tsx",
@@ -154,6 +155,27 @@ const checks = [
       "submitInboundPackage",
       "submitShipment",
       "submitTrackingEvent"
+    ]
+  },
+  {
+    name: "procurement payment flow debits wallet and blocks negative balance",
+    haystacks: ["repository", "api", "app", "apiContract"],
+    needles: [
+      "payProcurementOrder",
+      "Insufficient wallet balance",
+      "POST /api/procurement/orders/:id/pay",
+      "submitProcurementPayment"
+    ]
+  },
+  {
+    name: "procurement purchase completion creates inbound pre-alert package",
+    haystacks: ["migration7", "repository", "api", "app", "apiContract"],
+    needles: [
+      "procurement_order_packages",
+      "markProcurementPurchased",
+      "pending_inbound",
+      "POST /api/admin/procurement/orders/:id/mark-purchased",
+      "submitProcurementPurchased"
     ]
   }
 ];

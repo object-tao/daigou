@@ -73,6 +73,12 @@
 - 寫入：`support_tickets`、`audit_logs`。
 - H5 接入：會員提交入口的「客服工單」表單。
 
+- `POST /api/procurement/orders/:id/pay`
+- 用途：會員用港幣餘額全額支付已報價代購訂單。
+- 規則：按最新人工 JPY/HKD 匯率折算商品與日本本地運費，再加服務費；餘額不足時拒絕，不能產生負餘額。
+- 寫入：`wallets`、`procurement_orders`、`financial_ledger_entries`、`audit_logs`。
+- 狀態：`pending_payment` -> `pending_purchase`。
+
 ## 後台
 
 - `GET /api/admin/roles`
@@ -96,6 +102,12 @@
 - 必填：`itemAmountJpy`。
 - 可選：`localShippingJpy`、`serviceFeeHkd`、`remarks`。
 - 寫入：`procurement_orders`、`audit_logs`。
+
+- `POST /api/admin/procurement/orders/:id/mark-purchased`
+- 用途：後台標記代購訂單已完成日本採購，並自動生成入庫預報包裹。
+- 可選：`japanTrackingNo`、`warehouseId`、`remarks`。
+- 寫入：`procurement_orders`、`inbound_packages`、`procurement_order_packages`、`package_identifiers`、`audit_logs`。
+- 狀態：`pending_purchase` 或 `purchasing` -> `purchased`，包裹狀態為 `pending_inbound`。
 
 - `POST /api/admin/payments/:id/approve`
 - 用途：財務審核銀行轉帳充值，入帳到會員港幣餘額。

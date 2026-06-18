@@ -22,6 +22,8 @@ import {
   getMemberOrders,
   getMemberProfile,
   getOperationalRules,
+  markProcurementPurchased,
+  payProcurementOrder,
   quoteProcurementOrder,
   receiveInboundPackage
 } from "./repository";
@@ -208,6 +210,15 @@ app.post("/api/support/tickets", async (c) => {
   return c.json(ticket, 201);
 });
 
+app.post("/api/procurement/orders/:id/pay", async (c) => {
+  try {
+    const result = await payProcurementOrder(c.env.DB, c.req.param("id"));
+    return c.json(result);
+  } catch (error) {
+    return c.json({ error: error instanceof Error ? error.message : "Payment failed" }, 400);
+  }
+});
+
 app.post("/api/admin/procurement/orders/:id/quote", async (c) => {
   const body = await readJsonBody(c);
 
@@ -235,6 +246,30 @@ app.post("/api/admin/procurement/orders/:id/quote", async (c) => {
     return c.json(result);
   } catch (error) {
     return c.json({ error: error instanceof Error ? error.message : "Quote failed" }, 400);
+  }
+});
+
+app.post("/api/admin/procurement/orders/:id/mark-purchased", async (c) => {
+  const body = await readJsonBody(c);
+
+  if (!body) {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+
+  const japanTrackingNo = textField(body, "japanTrackingNo") ?? undefined;
+  const warehouseId = textField(body, "warehouseId") ?? undefined;
+  const remarks = textField(body, "remarks") ?? undefined;
+
+  try {
+    const result = await markProcurementPurchased(c.env.DB, c.req.param("id"), {
+      japanTrackingNo,
+      warehouseId,
+      remarks
+    });
+
+    return c.json(result, 201);
+  } catch (error) {
+    return c.json({ error: error instanceof Error ? error.message : "Mark purchased failed" }, 400);
   }
 });
 

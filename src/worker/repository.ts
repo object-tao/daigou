@@ -50,6 +50,16 @@ type ProcurementRow = {
   updated_at: string;
 };
 
+type ProcurementPaymentRow = {
+  id: string;
+  member_id: string;
+  status: string;
+  item_amount_jpy: number | null;
+  local_shipping_jpy: number | null;
+  service_fee_hkd: number | null;
+  balance_hkd: number | null;
+};
+
 type AuctionRow = {
   id: string;
   platform: string;
@@ -215,6 +225,10 @@ type WalletBalanceRow = {
   balance_hkd: number;
 };
 
+type ExchangeRateRow = {
+  rate: number;
+};
+
 export type CreateProcurementInput = {
   platform: string;
   productUrl: string;
@@ -241,6 +255,12 @@ export type QuoteProcurementInput = {
   itemAmountJpy: number;
   localShippingJpy?: number | null;
   serviceFeeHkd?: number | null;
+  remarks?: string;
+};
+
+export type MarkProcurementPurchasedInput = {
+  japanTrackingNo?: string;
+  warehouseId?: string;
   remarks?: string;
 };
 
@@ -315,6 +335,44 @@ function shipmentStatusFromTrackingEvent(status: string): string {
   };
 
   return statuses[status] ?? "in_transit";
+}
+
+async function getExchangeRate(db: D1Database, sourceCurrency: string, targetCurrency: string): Promise<number> {
+  const row = await first<ExchangeRateRow>(
+    db,
+    `SELECT rate
+       FROM exchange_rates
+      WHERE source_currency = ? AND target_currency = ?
+      ORDER BY effective_from DESC, created_at DESC
+      LIMIT 1`,
+    sourceCurrency,
+    targetCurrency
+  );
+
+  return Number(row?.rate ?? 0.055);
+}
+
+async function ensureWallet(db: D1Database, memberId: string): Promise<WalletBalanceRow> {
+  const wallet = await first<WalletBalanceRow>(
+    db,
+    "SELECT balance_hkd FROM wallets WHERE member_id = ?",
+    memberId
+  );
+
+  if (wallet) {
+    return wallet;
+  }
+
+  await run(
+    db,
+    "INSERT INTO wallets (id, member_id, balance_hkd, commission_balance_hkd) VALUES (?, ?, ?, ?)",
+    createId("wallet"),
+    memberId,
+    0,
+    0
+  );
+
+  return { balance_hkd: 0 };
 }
 
 async function writeAuditLog(
@@ -1189,6 +1247,208 @@ export async function quoteProcurementOrder(
   return {
     id: orderId,
     status: "pending_payment"
+  };
+}
+
+export async function payProcurementOrder(
+  db: D1Database,
+  orderId: string,
+  memberId = "demo-member"
+) {
+  const order = await first<ProcurementPaymentRow>(
+    db,
+    `SELECT procurement_orders.id,
+            procurement_orders.member_id,
+            procurement_orders.status,
+            procurement_orders.item_amount_jpy,
+            procurement_orders.local_shipping_jpy,
+            procurement_orders.service_fee_hkd,
+            wallets.balance_hkd
+       FROM procurement_orders
+       LEFT JOIN wallets ON wallets.member_id = procurement_orders.member_id
+      WHERE procurement_orders.id = ? AND procurement_orders.member_id = ?`,
+    orderId,
+    memberId
+  );
+
+  if (!order) {
+    throw new Error("Procurement order not found");
+  }
+
+  if (order.status !== "pending_payment") {
+    throw new Error("Procurement order is not pending payment");
+  }
+
+  if (order.item_amount_jpy === null) {
+    throw new Error("Procurement order has not been quoted");
+  }
+
+  const exchangeRate = await getExchangeRate(db, "JPY", "HKD");
+  const itemAmountJpy = order.item_amount_jpy ?? 0;
+  const localShippingJpy = order.local_shipping_jpy ?? 0;
+  const serviceFeeHkd = order.service_fee_hkd ?? 0;
+  const jpySubtotal = itemAmountJpy + localShippingJpy;
+  const convertedHkd = Math.ceil(jpySubtotal * exchangeRate);
+  const payableHkd = convertedHkd + serviceFeeHkd;
+  const wallet = await ensureWallet(db, memberId);
+
+  if (wallet.balance_hkd < payableHkd) {
+    throw new Error("Insufficient wallet balance");
+  }
+
+  const balanceAfterHkd = wallet.balance_hkd - payableHkd;
+
+  await run(
+    db,
+    "UPDATE wallets SET balance_hkd = ?, updated_at = CURRENT_TIMESTAMP WHERE member_id = ?",
+    balanceAfterHkd,
+    memberId
+  );
+  await run(
+    db,
+    `UPDATE procurement_orders
+        SET status = ?,
+            updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?`,
+    "pending_purchase",
+    orderId
+  );
+  await run(
+    db,
+    `INSERT INTO financial_ledger_entries (
+      id, member_id, bucket, direction, amount_hkd, amount_jpy, source_type, source_id, balance_after_hkd, note
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    createId("ledger"),
+    memberId,
+    "代購消費",
+    "debit",
+    payableHkd,
+    jpySubtotal,
+    "procurement_order",
+    orderId,
+    balanceAfterHkd,
+    `Procurement payment at JPY/HKD ${exchangeRate}`
+  );
+  await writeAuditLog(db, "member", memberId, "procurement_order.pay", "procurement_order", orderId, {
+    previousStatus: order.status,
+    nextStatus: "pending_purchase",
+    itemAmountJpy,
+    localShippingJpy,
+    serviceFeeHkd,
+    exchangeRate,
+    payableHkd,
+    balanceAfterHkd
+  });
+
+  return {
+    id: orderId,
+    status: "pending_purchase",
+    payableHkd,
+    balanceAfterHkd,
+    exchangeRate
+  };
+}
+
+export async function markProcurementPurchased(
+  db: D1Database,
+  orderId: string,
+  input: MarkProcurementPurchasedInput,
+  staffId = "staff-admin-demo"
+) {
+  const order = await first<{ id: string; member_id: string; status: string; title: string }>(
+    db,
+    "SELECT id, member_id, status, title FROM procurement_orders WHERE id = ?",
+    orderId
+  );
+
+  if (!order) {
+    throw new Error("Procurement order not found");
+  }
+
+  if (!["pending_purchase", "purchasing"].includes(order.status)) {
+    throw new Error("Procurement order is not ready to mark purchased");
+  }
+
+  const packageId = createId("DP-PK");
+  const warehouseId = input.warehouseId?.trim() || "warehouse-funabashi";
+  const japanTrackingNo = input.japanTrackingNo?.trim() || null;
+
+  await run(
+    db,
+    `UPDATE procurement_orders
+        SET status = ?,
+            remarks = COALESCE(?, remarks),
+            updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?`,
+    "purchased",
+    input.remarks?.trim() || null,
+    orderId
+  );
+  await run(
+    db,
+    `INSERT INTO inbound_packages (
+      id, member_id, warehouse_id, tracking_no, status, owner_status, free_storage_until
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    packageId,
+    order.member_id,
+    warehouseId,
+    japanTrackingNo,
+    "pending_inbound",
+    "identified",
+    dateAfterDays(30)
+  );
+  await run(
+    db,
+    `INSERT INTO procurement_order_packages (id, procurement_order_id, package_id)
+     VALUES (?, ?, ?)`,
+    createId("po-pkg"),
+    orderId,
+    packageId
+  );
+  await run(
+    db,
+    `INSERT OR IGNORE INTO package_identifiers (id, package_id, identifier_type, identifier_value)
+     VALUES (?, ?, ?, ?)`,
+    createId("pkgid"),
+    packageId,
+    "member_package_no",
+    packageId
+  );
+  await run(
+    db,
+    `INSERT OR IGNORE INTO package_identifiers (id, package_id, identifier_type, identifier_value)
+     VALUES (?, ?, ?, ?)`,
+    createId("pkgid"),
+    packageId,
+    "source_order_no",
+    orderId
+  );
+
+  if (japanTrackingNo) {
+    await run(
+      db,
+      `INSERT OR IGNORE INTO package_identifiers (id, package_id, identifier_type, identifier_value)
+       VALUES (?, ?, ?, ?)`,
+      createId("pkgid"),
+      packageId,
+      "japan_tracking_no",
+      japanTrackingNo
+    );
+  }
+
+  await writeAuditLog(db, "staff", staffId, "procurement_order.mark_purchased", "procurement_order", orderId, {
+    previousStatus: order.status,
+    nextStatus: "purchased",
+    packageId,
+    warehouseId,
+    japanTrackingNo
+  });
+
+  return {
+    id: orderId,
+    status: "purchased",
+    packageId,
+    packageStatus: "pending_inbound"
   };
 }
 
