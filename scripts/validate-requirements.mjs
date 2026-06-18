@@ -3,10 +3,12 @@ import { readFileSync } from "node:fs";
 const files = {
   domain: "src/shared/domain.ts",
   migration4: "migrations/0004_response2_operational_rules.sql",
+  migration5: "migrations/0005_confirmed_decisions.sql",
   api: "src/worker/index.ts",
   repository: "src/worker/repository.ts",
   app: "src/app/main.tsx",
   prd: "docs/product/requirements-response-2.md",
+  confirmed: "docs/product/confirmed-decisions.md",
   apiContract: "docs/architecture/api-contract.md"
 };
 
@@ -100,6 +102,41 @@ const checks = [
       "pending_payment",
       "financial_ledger_entries"
     ]
+  },
+  {
+    name: "confirmed MVP decisions are physically isolated in product docs",
+    haystacks: ["confirmed"],
+    needles: ["email", "KYC", "zh-Hant", "en", "ja", "60", "WhatsApp", "不做"]
+  },
+  {
+    name: "confirmed MVP decisions are modeled in D1",
+    haystacks: ["migration5"],
+    needles: [
+      "business_rule_settings",
+      "service_fee_rules",
+      "carton_types",
+      "registration_method",
+      "kyc_required_mvp",
+      "full_payment_before_purchase",
+      "legacy_data_migration_mvp"
+    ]
+  },
+  {
+    name: "confirmed business rules are exposed through operational rules API",
+    haystacks: ["domain", "repository", "apiContract"],
+    needles: [
+      "confirmedBusinessRules",
+      "serviceFeeRules",
+      "cartonTypes",
+      "repackAfterConsolidationAllowed",
+      "greater_of_actual_or_volumetric",
+      "warehouseCanViewFinanceData"
+    ]
+  },
+  {
+    name: "notification MVP excludes email and WhatsApp sending",
+    haystacks: ["domain", "migration5", "confirmed"],
+    needles: ["emailNotifications: false", "whatsappAddon: false", "email_mvp", "whatsapp_mvp"]
   }
 ];
 

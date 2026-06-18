@@ -22,6 +22,9 @@
 - `GET /api/catalog/operational-rules`
 - 來源：優先 D1，失敗時回退共享領域模型。
 - 包含：
+  - 已確認 MVP 業務規則 `confirmedBusinessRules`。
+  - 可配置服務費規則 `serviceFeeRules`。
+  - 箱型固定紙箱費 `cartonTypes`。
   - 代購與集運狀態。
   - 包裹多編號規則。
   - 日本本地運費補收規則。
@@ -32,6 +35,13 @@
   - 倉庫掃碼步驟。
   - 財務流水分桶。
   - SEO 欄位。
+- 已確認規則示例：
+  - 會員以 email 註冊，MVP 不做 KYC。
+  - 第一版語言為 `zh-Hant`、`en`、`ja`，預設 `zh-Hant`。
+  - 代購需 `full_payment_before_purchase`，未採購可取消，已採購不可取消。
+  - 合箱後不允許拆箱重組，字段為 `repackAfterConsolidationAllowed=false`。
+  - 物流計費取實重與體積重較高者，字段為 `greater_of_actual_or_volumetric`。
+  - 倉庫角色不可查看財務資料，字段為 `warehouseCanViewFinanceData=false`。
 
 ## 會員
 

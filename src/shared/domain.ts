@@ -39,7 +39,8 @@ export const featureFlags = {
   yahooAuctionManualBidding: true,
   platformApiIntegrations: false,
   bankTransferTopUp: true,
-  whatsappAddon: true,
+  emailNotifications: false,
+  whatsappAddon: false,
   imageSearch: "planned",
   seo: true,
   miniProgram: false
@@ -159,6 +160,100 @@ export const autoDebitPolicy = {
   insufficientBalanceAction: "notify_member_for_top_up"
 };
 
+export const confirmedBusinessRules = {
+  member: {
+    registrationMethod: "email",
+    kycRequiredMvp: false,
+    levelCount: 5,
+    upgradeMetrics: ["cumulative_spend", "cumulative_freight", "top_up_amount", "order_count"],
+    benefits: [
+      "freight_discount",
+      "service_fee_discount",
+      "storage_free_days_bonus",
+      "priority_handling",
+      "commission_rate"
+    ]
+  },
+  content: {
+    firstReleaseLocales: appLocales,
+    defaultLocale: "zh-Hant",
+    publicPricingPage: true,
+    articleModuleMvp: false
+  },
+  procurement: {
+    paymentPolicy: "full_payment_before_purchase",
+    cancellationPolicy: {
+      beforePurchase: "allowed",
+      afterPurchase: "not_allowed"
+    },
+    localShippingCollection: "after_purchase"
+  },
+  auction: {
+    failedBidRefundDestination: "wallet_balance",
+    wonLotAutoCreatesInboundNotice: true
+  },
+  warehouse: {
+    inboundMatching: "auto_match_by_package_information",
+    ownerlessPackageRetentionDays: 60,
+    ownerlessPackageAction: "destroy",
+    memberCanSelectConsolidation: true,
+    staffCanSelectConsolidation: true,
+    repackAfterConsolidationAllowed: false,
+    freeStorageDays: 30,
+    overstorageBilling: "per_package_per_day"
+  },
+  logistics: {
+    billingWeight: "greater_of_actual_or_volumetric",
+    trackingEvents: [
+      "packed",
+      "outbound",
+      "departed_by_air_or_sea",
+      "arrived_port",
+      "customs_clearance",
+      "delivery",
+      "signed"
+    ]
+  },
+  finance: {
+    negativeBalanceAllowed: false,
+    refundDestination: "wallet_balance",
+    commissionDestination: "wallet_balance",
+    autoDebitLimitConfigurable: true
+  },
+  notification: {
+    emailMvp: false,
+    whatsappMvp: false,
+    userCanDisable: true
+  },
+  admin: {
+    permissionGranularity: "module",
+    financeCanEditOrderAmount: true,
+    warehouseCanViewFinanceData: false
+  },
+  migration: {
+    legacyDataMigrationMvp: false
+  }
+};
+
+export const serviceFeeRuleTemplates = [
+  { serviceType: "procurement", feeType: "item_amount_percent", configurable: true },
+  { serviceType: "procurement", feeType: "fixed_fee", configurable: true },
+  { serviceType: "auction", feeType: "winning_bid_percent", configurable: true },
+  { serviceType: "auction", feeType: "fixed_fee", configurable: true },
+  { serviceType: "photo_full", feeType: "fixed_fee", configurable: true },
+  { serviceType: "reinforce_packaging", feeType: "fixed_fee", configurable: true },
+  { serviceType: "vacuum_pack", feeType: "fixed_fee", configurable: true },
+  { serviceType: "remove_shoe_box", feeType: "fixed_fee", configurable: true },
+  { serviceType: "keep_original_box", feeType: "fixed_fee", configurable: true },
+  { serviceType: "negotiation", feeType: "fixed_fee", configurable: true }
+];
+
+export const cartonTypeTemplates = [
+  { code: "S", name: "Small carton", fixedFeeHkd: 0, enabled: true },
+  { code: "M", name: "Medium carton", fixedFeeHkd: 0, enabled: true },
+  { code: "L", name: "Large carton", fixedFeeHkd: 0, enabled: true }
+];
+
 export const supportTicketTypes = [
   "售後申請",
   "補款申請",
@@ -208,8 +303,8 @@ export const serviceBlueprint = {
     { code: "negotiation", label: "議價服務", billing: "per_order" }
   ],
   notificationChannels: [
-    { code: "email", label: "郵件", defaultEnabled: true, paidAddon: false },
-    { code: "whatsapp", label: "WhatsApp", defaultEnabled: false, paidAddon: true }
+    { code: "email", label: "郵件", defaultEnabled: false, paidAddon: false },
+    { code: "whatsapp", label: "WhatsApp", defaultEnabled: false, paidAddon: false }
   ],
   memberLevels: ["LV1", "LV2", "LV3", "LV4", "LV5"],
   pointBuckets: ["代購商品積分", "物流費用積分"],
@@ -222,7 +317,10 @@ export const serviceBlueprint = {
   supportTicketTypes,
   warehouseScanSteps,
   financeLedgerBuckets,
-  seoFields
+  seoFields,
+  confirmedBusinessRules,
+  serviceFeeRuleTemplates,
+  cartonTypeTemplates
 };
 
 export const demoMember = {

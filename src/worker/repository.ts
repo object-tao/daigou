@@ -1,7 +1,9 @@
 import {
   adminSummary,
   autoDebitPolicy,
+  cartonTypeTemplates,
   consolidationOptions,
+  confirmedBusinessRules,
   demoMember,
   demoOrders,
   financeLedgerBuckets,
@@ -9,6 +11,7 @@ import {
   logisticsChannelTemplates,
   packageNumberRules,
   seoFields,
+  serviceFeeRuleTemplates,
   supportTicketTypes,
   warehouseScanSteps,
   workflowStates,
@@ -115,6 +118,29 @@ type AutoDebitRuleRow = {
   insufficient_balance_action: string;
 };
 
+type BusinessRuleSettingRow = {
+  namespace: string;
+  rule_key: string;
+  value_json: string;
+  description: string | null;
+};
+
+type ServiceFeeRuleRow = {
+  service_type: string;
+  fee_type: string;
+  rate_percent: number | null;
+  fixed_fee_hkd: number | null;
+  currency: string;
+  enabled: number;
+};
+
+type CartonTypeRow = {
+  code: string;
+  name: string;
+  fixed_fee_hkd: number;
+  enabled: number;
+};
+
 type SupportTicketRow = {
   id: string;
   ticket_type: string;
@@ -217,6 +243,14 @@ async function run(db: D1Database, sql: string, ...binds: D1Value[]) {
 
 function createId(prefix: string): string {
   return `${prefix}-${crypto.randomUUID()}`;
+}
+
+function parseJsonValue(value: string): unknown {
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return value;
+  }
 }
 
 async function writeAuditLog(
@@ -454,8 +488,51 @@ export async function getOperationalRules(db: D1Database) {
         ORDER BY updated_at DESC
         LIMIT 1`
     );
+    const businessRules = await all<BusinessRuleSettingRow>(
+      db,
+      `SELECT namespace, rule_key, value_json, description
+         FROM business_rule_settings
+        ORDER BY namespace, rule_key`
+    );
+    const serviceFeeRules = await all<ServiceFeeRuleRow>(
+      db,
+      `SELECT service_type, fee_type, rate_percent, fixed_fee_hkd, currency, enabled
+         FROM service_fee_rules
+        ORDER BY service_type, fee_type`
+    );
+    const cartonTypes = await all<CartonTypeRow>(
+      db,
+      `SELECT code, name, fixed_fee_hkd, enabled
+         FROM carton_types
+        ORDER BY code`
+    );
 
     return {
+      confirmedBusinessRules: businessRules.length
+        ? businessRules.reduce<Record<string, Record<string, unknown>>>((groups, rule) => {
+            groups[rule.namespace] ??= {};
+            groups[rule.namespace][rule.rule_key] = parseJsonValue(rule.value_json);
+            return groups;
+          }, {})
+        : confirmedBusinessRules,
+      serviceFeeRules: serviceFeeRules.length
+        ? serviceFeeRules.map((rule) => ({
+            serviceType: rule.service_type,
+            feeType: rule.fee_type,
+            ratePercent: rule.rate_percent,
+            fixedFeeHkd: rule.fixed_fee_hkd,
+            currency: rule.currency,
+            enabled: rule.enabled === 1
+          }))
+        : serviceFeeRuleTemplates,
+      cartonTypes: cartonTypes.length
+        ? cartonTypes.map((carton) => ({
+            code: carton.code,
+            name: carton.name,
+            fixedFeeHkd: carton.fixed_fee_hkd,
+            enabled: carton.enabled === 1
+          }))
+        : cartonTypeTemplates,
       workflowStates: statuses.reduce<Record<string, Array<{ code: string; label: string; terminal: boolean }>>>(
         (groups, status) => {
           groups[status.order_type] ??= [];
@@ -526,6 +603,9 @@ export async function getOperationalRules(db: D1Database) {
       consolidationOptions,
       logisticsChannelTemplates,
       autoDebitPolicy,
+      confirmedBusinessRules,
+      serviceFeeRules: serviceFeeRuleTemplates,
+      cartonTypes: cartonTypeTemplates,
       supportTicketTypes,
       warehouseScanSteps,
       financeLedgerBuckets,
