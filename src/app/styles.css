@@ -299,6 +299,62 @@ h3 {
   white-space: nowrap;
 }
 
+.notice {
+  background: #eef8f4;
+  border: 1px solid #cbe8dc;
+  border-radius: 8px;
+  color: #225b4c;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.form-grid form {
+  border: 1px solid #e5ebf3;
+  border-radius: 8px;
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.form-grid input,
+.form-grid select,
+.form-grid textarea {
+  width: 100%;
+  border: 1px solid #d9e1ec;
+  border-radius: 8px;
+  color: #253853;
+  min-height: 40px;
+  padding: 9px 10px;
+  font: inherit;
+}
+
+.form-grid textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+.form-grid button {
+  border: 0;
+  border-radius: 8px;
+  background: #10223f;
+  color: #ffffff;
+  min-height: 40px;
+  padding: 0 12px;
+  cursor: pointer;
+}
+
+.form-grid button:disabled {
+  background: #8b98aa;
+  cursor: wait;
+}
+
 .rule-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -395,6 +451,10 @@ h3 {
 
   .metric-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
   }
 
   .panel {

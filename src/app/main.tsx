@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { type FormEvent, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Bell,
@@ -26,12 +26,12 @@ import {
   adminMetrics,
   adminSummary as fallbackAdminSummary,
   demoOrders,
-  roleMatrix,
-  serviceBlueprint,
   packageNumberRules,
+  roleMatrix,
+  seoFields,
+  serviceBlueprint,
   supportTicketTypes,
   warehouseScanSteps,
-  seoFields,
   type MemberOrder,
   type Metric
 } from "../shared/domain";
@@ -52,10 +52,10 @@ const emptyWorkQueue: WorkQueue = {
 };
 
 const memberFlows = [
-  { icon: ShoppingCart, title: "代購購物車", text: "Mercari、Rakuma、Amazon Japan 及線下商品可合併提交，保留備註與日本本地運費後補。" },
-  { icon: Gavel, title: "Yahoo 人工代拍", text: "會員設定最高出價與扣款授權，客服在授權範圍內人工出價，超額觸發確認。" },
-  { icon: Boxes, title: "集運與合箱", text: "船橋倉作為最終出發倉，免運合箱，紙箱費與超材處理由後台計費。" },
-  { icon: PackageCheck, title: "一件直發", text: "單件貨不需上架等待時，自動提醒轉入出庫打包區等待發運。" }
+  { icon: ShoppingCart, title: "代購購物車", text: "跨平台商品可合併提交，保留備註與日本本地運費後補。" },
+  { icon: Gavel, title: "Yahoo 人工代拍", text: "會員設定最高出價與授權上限，客服在授權範圍內人工出價。" },
+  { icon: Boxes, title: "集運與合箱", text: "船橋倉作為最終出發倉，免費合箱，紙箱費與增值服務另計。" },
+  { icon: PackageCheck, title: "一件直發", text: "單件貨不需上架等待時，提醒轉入出庫打包區等待發運。" }
 ];
 
 const adminModules = [
@@ -91,32 +91,126 @@ async function loadJson<T>(path: string, fallback: T): Promise<T> {
   }
 }
 
+async function postJson<T>(path: string, body: Record<string, unknown>): Promise<T> {
+  const response = await fetch(path, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(body)
+  });
+  const payload = (await response.json()) as T | { error?: string };
+
+  if (!response.ok) {
+    const errorPayload = payload as { error?: string };
+    throw new Error(errorPayload.error ?? "提交失敗");
+  }
+
+  return payload as T;
+}
+
 function App() {
   const [metrics, setMetrics] = useState<Metric[]>(adminMetrics);
   const [orders, setOrders] = useState<MemberOrder[]>(demoOrders);
   const [operations, setOperations] = useState<string[]>(fallbackAdminSummary.operations);
   const [workQueue, setWorkQueue] = useState<WorkQueue>(emptyWorkQueue);
+  const [notice, setNotice] = useState("Ready");
+  const [submitting, setSubmitting] = useState(false);
+
+  async function refreshData() {
+    const [summary, orderPayload, queuePayload] = await Promise.all([
+      loadJson<{ counters: typeof fallbackAdminSummary.counters; operations: string[] }>(
+        "/api/admin/summary",
+        fallbackAdminSummary
+      ),
+      loadJson<{ items: MemberOrder[] }>("/api/member/orders", { items: demoOrders }),
+      loadJson<WorkQueue>("/api/admin/work-queue", emptyWorkQueue)
+    ]);
+
+    setMetrics([
+      { label: "待報價", value: String(summary.counters.pendingQuotes), tone: "amber" },
+      { label: "代拍中", value: String(summary.counters.auctionBids), tone: "blue" },
+      { label: "入庫包裹", value: String(summary.counters.inboundPackages), tone: "green" },
+      { label: "退款審核", value: String(summary.counters.refundReviews), tone: "red" }
+    ]);
+    setOperations(summary.operations);
+    setOrders(orderPayload.items);
+    setWorkQueue(queuePayload);
+  }
 
   useEffect(() => {
-    void loadJson<{ counters: typeof fallbackAdminSummary.counters; operations: string[] }>(
-      "/api/admin/summary",
-      fallbackAdminSummary
-    ).then((summary) => {
-      setMetrics([
-        { label: "待報價", value: String(summary.counters.pendingQuotes), tone: "amber" },
-        { label: "代拍中", value: String(summary.counters.auctionBids), tone: "blue" },
-        { label: "入庫包裹", value: String(summary.counters.inboundPackages), tone: "green" },
-        { label: "退款審核", value: String(summary.counters.refundReviews), tone: "red" }
-      ]);
-      setOperations(summary.operations);
-    });
-
-    void loadJson<{ items: MemberOrder[] }>("/api/member/orders", { items: demoOrders }).then((payload) => {
-      setOrders(payload.items);
-    });
-
-    void loadJson<WorkQueue>("/api/admin/work-queue", emptyWorkQueue).then(setWorkQueue);
+    void refreshData();
   }, []);
+
+  async function submitProcurement(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    setSubmitting(true);
+    setNotice("Submitting procurement order...");
+
+    try {
+      const result = await postJson<{ id: string; status: string }>("/api/procurement/orders", {
+        platform: String(form.get("platform") ?? ""),
+        productUrl: String(form.get("productUrl") ?? ""),
+        title: String(form.get("title") ?? ""),
+        quantity: Number(form.get("quantity") ?? 1),
+        remarks: String(form.get("remarks") ?? "")
+      });
+      setNotice(`代購訂單已提交：${result.id}`);
+      event.currentTarget.reset();
+      await refreshData();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "提交失敗");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function submitPayment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    setSubmitting(true);
+    setNotice("Submitting bank transfer request...");
+
+    try {
+      const result = await postJson<{ id: string; status: string }>("/api/payments/bank-transfer-requests", {
+        amountHkd: Number(form.get("amountHkd") ?? 0),
+        proofUrl: String(form.get("proofUrl") ?? "")
+      });
+      setNotice(`充值申請已提交：${result.id}`);
+      event.currentTarget.reset();
+      await refreshData();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "提交失敗");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function submitTicket(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    setSubmitting(true);
+    setNotice("Submitting support ticket...");
+
+    try {
+      const result = await postJson<{ id: string; status: string }>("/api/support/tickets", {
+        ticketType: String(form.get("ticketType") ?? ""),
+        subject: String(form.get("subject") ?? ""),
+        description: String(form.get("description") ?? ""),
+        relatedType: String(form.get("relatedType") ?? ""),
+        relatedId: String(form.get("relatedId") ?? "")
+      });
+      setNotice(`客服工單已提交：${result.id}`);
+      event.currentTarget.reset();
+      await refreshData();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "提交失敗");
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   return (
     <main className="shell">
@@ -130,8 +224,7 @@ function App() {
         </div>
         <nav>
           <a href="#home" className="active"><Home size={18} /> 首頁</a>
-          <a href="#procurement"><ShoppingCart size={18} /> 代購</a>
-          <a href="#auction"><Gavel size={18} /> 代拍</a>
+          <a href="#actions"><ShoppingCart size={18} /> 提交</a>
           <a href="#warehouse"><Boxes size={18} /> 倉儲</a>
           <a href="#finance"><CircleDollarSign size={18} /> 財務</a>
           <a href="#admin"><Settings size={18} /> 後台</a>
@@ -195,6 +288,47 @@ function App() {
             </ul>
           </div>
 
+          <div className="panel main-panel" id="actions">
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">Member Actions</p>
+                <h2>會員提交入口</h2>
+              </div>
+              <ShoppingCart size={22} />
+            </div>
+            <p className="notice" aria-live="polite">{notice}</p>
+            <div className="form-grid">
+              <form onSubmit={submitProcurement}>
+                <h3>人工代購</h3>
+                <input name="platform" placeholder="平台，例如 Mercari" required />
+                <input name="productUrl" placeholder="商品 URL" required />
+                <input name="title" placeholder="商品名稱" required />
+                <input name="quantity" type="number" min="1" defaultValue="1" required />
+                <textarea name="remarks" placeholder="備註" />
+                <button disabled={submitting} type="submit">提交代購</button>
+              </form>
+              <form onSubmit={submitPayment}>
+                <h3>銀行轉帳充值</h3>
+                <input name="amountHkd" type="number" min="1" placeholder="金額 HKD" required />
+                <input name="proofUrl" placeholder="付款憑證 URL（可後補）" />
+                <button disabled={submitting} type="submit">提交充值</button>
+              </form>
+              <form onSubmit={submitTicket}>
+                <h3>客服工單</h3>
+                <select name="ticketType" required>
+                  {supportTicketTypes.map((type) => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
+                </select>
+                <input name="subject" placeholder="主題" required />
+                <textarea name="description" placeholder="問題描述" required />
+                <input name="relatedType" placeholder="關聯類型，例如 package" />
+                <input name="relatedId" placeholder="關聯編號，例如 DP-PK-10003" />
+                <button disabled={submitting} type="submit">提交工單</button>
+              </form>
+            </div>
+          </div>
+
           <div className="panel" id="warehouse">
             <div className="panel-heading">
               <div>
@@ -253,7 +387,7 @@ function App() {
               <TicketPercent size={22} />
             </div>
             <p className="body-text">
-              支援 {serviceBlueprint.memberLevels.length} 級會員、推薦佣金、代購商品積分與物流費用積分。積分兌換以公司提供商品為主，開團者獎勵和優惠券限制由後台配置。
+              支援 {serviceBlueprint.memberLevels.length} 級會員、推薦佣金、代購商品積分與物流費用積分。開團者獎勵和優惠券限制由後台配置。
             </p>
           </div>
 
@@ -287,7 +421,7 @@ function App() {
               <Languages size={22} />
             </div>
             <p className="body-text">
-              前台與後台內容保留繁體中文、英文、日文翻譯管理。H5 先做好語義標題、描述和可索引內容，後續按商品與物流頁補結構化資料。
+              前台與後台內容保留繁體中文、英文、日文翻譯管理。H5 先做好語義標題、描述和可索引內容。
             </p>
           </div>
 
@@ -300,7 +434,7 @@ function App() {
               <LockKeyhole size={22} />
             </div>
             <p className="body-text">
-              身份圖片、付款憑證和包裹照片後續放私有 R2，資料庫只存引用。後台操作全量寫入審計日誌，支持按人員、對象與動作追查。
+              身份圖片、付款憑證和包裹照片後續放私有 R2。會員提交和後台操作全量寫入審計日誌。
             </p>
           </div>
 
