@@ -91,7 +91,26 @@ const checks = [
   {
     name: "H5 exposes MVP member write forms",
     haystacks: ["app", "apiContract"],
-    needles: ["提交代購", "銀行轉帳充值", "提交工單", "會員提交入口"]
+    needles: ["提交代購", "銀行轉帳充值", "提交工單", "會員前台"]
+  },
+  {
+    name: "H5 separates consumer portal and admin console menus",
+    haystacks: ["app"],
+    needles: [
+      "memberMenus",
+      "adminMenus",
+      "會員前台",
+      "管理後台",
+      "人工代購",
+      "充值與餘額",
+      "我的包裹",
+      "代購報價",
+      "採購處理",
+      "入庫登記",
+      "合箱出庫",
+      "物流節點",
+      "財務審核"
+    ]
   },
   {
     name: "Admin APIs close quote and bank-transfer review loop",
