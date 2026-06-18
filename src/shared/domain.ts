@@ -79,11 +79,117 @@ export const roleMatrix: RoleDefinition[] = [
 ];
 
 export const workflowStates = {
-  procurement: ["draft_cart", "pending_quote", "awaiting_payment", "purchasing", "ordered", "inbound_pending", "completed", "cancelled"],
+  procurement: [
+    "pending_payment",
+    "paid",
+    "pending_purchase",
+    "purchasing",
+    "purchased",
+    "arrived_japan_warehouse",
+    "pending_shelving",
+    "shelved",
+    "pending_consolidation",
+    "pending_packing",
+    "pending_international_freight_payment",
+    "pending_dispatch",
+    "dispatched",
+    "completed",
+    "cancelled",
+    "refunding",
+    "refunded"
+  ],
   auction: ["manual_bid_setup", "bidding", "won", "lost", "awaiting_payment", "refund_pending", "completed"],
-  package: ["received", "identified", "ownerless_pool", "value_added_pending", "ready_to_merge", "direct_dispatch", "packing", "shipped"],
+  package: [
+    "pending_inbound",
+    "inbound",
+    "pending_claim",
+    "claimed",
+    "pending_consolidation",
+    "packing",
+    "pending_payment",
+    "pending_outbound",
+    "outbound",
+    "in_transit",
+    "signed"
+  ],
   aftersales: ["pending_review", "approved", "rejected", "executed"]
 };
+
+export const packageNumberRules = [
+  { code: "japan_tracking_no", label: "日本物流單號", example: "JP-TRACK-123456" },
+  { code: "warehouse_inbound_no", label: "倉庫入庫號", example: "DP-IN-20260618-0001" },
+  { code: "member_package_no", label: "客戶包裹號", example: "DP-PK-10003" },
+  { code: "consolidation_batch_no", label: "合箱批次號", example: "DP-MG-20260618-0001" },
+  { code: "international_tracking_no", label: "國際物流號", example: "DP-HK-AIR-0001" }
+];
+
+export const localShippingFeeRules = [
+  { code: "pre_collect", label: "採購前預收" },
+  { code: "manual_after_purchase", label: "採購後人工補收" },
+  { code: "balance_debt", label: "自動加入餘額欠款" },
+  { code: "next_payment", label: "下次付款一起收" }
+];
+
+export const consolidationOptions = [
+  { code: "unlimited_items", label: "不限件數", configurable: true },
+  { code: "cross_platform", label: "可跨平台合箱", configurable: true },
+  { code: "free_consolidation", label: "免費合箱", configurable: true },
+  { code: "carton_fee", label: "收紙箱費", configurable: true },
+  { code: "keep_original_box", label: "保留原箱", configurable: true },
+  { code: "remove_shoe_box", label: "去除鞋盒", configurable: true },
+  { code: "vacuum_pack", label: "抽真空", configurable: true },
+  { code: "reinforce_packaging", label: "加強包裝", configurable: true }
+];
+
+export const logisticsChannelTemplates = [
+  { code: "HK_AIR", name: "香港空運", destination: "HK", mode: "air" },
+  { code: "HK_SEA", name: "香港海運", destination: "HK", mode: "sea" },
+  { code: "UK_AIR", name: "英國空運", destination: "GB", mode: "air" },
+  { code: "UK_SEA", name: "英國海運", destination: "GB", mode: "sea" },
+  { code: "CA", name: "加拿大", destination: "CA", mode: "mixed" },
+  { code: "AU", name: "澳洲", destination: "AU", mode: "mixed" },
+  { code: "MO", name: "澳門", destination: "MO", mode: "mixed" },
+  { code: "TW", name: "台灣", destination: "TW", mode: "mixed" }
+];
+
+export const autoDebitPolicy = {
+  balanceLimitHkd: 500,
+  reconfirmOverHkd: 100,
+  creditAllowed: false,
+  insufficientBalanceAction: "notify_member_for_top_up"
+};
+
+export const supportTicketTypes = [
+  "售後申請",
+  "補款申請",
+  "退款申請",
+  "查件",
+  "包裹異常",
+  "商品損壞",
+  "少件漏件"
+];
+
+export const warehouseScanSteps = [
+  "入庫掃碼",
+  "上架掃碼",
+  "合箱掃碼",
+  "打包掃碼",
+  "出庫掃碼"
+];
+
+export const financeLedgerBuckets = [
+  "會員餘額",
+  "代購消費",
+  "國際運費",
+  "日本本地運費",
+  "增值服務費",
+  "優惠券折扣",
+  "佣金",
+  "積分",
+  "退款紀錄"
+];
+
+export const seoFields = ["Title", "Meta Description", "URL Slug", "Open Graph", "Sitemap", "robots.txt"];
 
 export const adminMetrics: Metric[] = [
   { label: "待報價", value: "18", tone: "amber" },
@@ -107,7 +213,16 @@ export const serviceBlueprint = {
   ],
   memberLevels: ["LV1", "LV2", "LV3", "LV4", "LV5"],
   pointBuckets: ["代購商品積分", "物流費用積分"],
-  groupBuyRule: "會員推薦成團，線下同供應商談好貨同價；開團者獎勵規則由後台配置。"
+  groupBuyRule: "會員推薦成團，線下同供應商談好貨同價；開團者獎勵規則由後台配置。",
+  packageNumberRules,
+  localShippingFeeRules,
+  consolidationOptions,
+  logisticsChannelTemplates,
+  autoDebitPolicy,
+  supportTicketTypes,
+  warehouseScanSteps,
+  financeLedgerBuckets,
+  seoFields
 };
 
 export const demoMember = {

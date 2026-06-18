@@ -299,6 +299,29 @@ h3 {
   white-space: nowrap;
 }
 
+.rule-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.rule-grid div {
+  border: 1px solid #e5ebf3;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.rule-grid strong,
+.rule-grid span {
+  display: block;
+}
+
+.rule-grid span {
+  color: #52657d;
+  line-height: 1.6;
+  margin-top: 6px;
+}
+
 .check-list,
 .timeline {
   padding-left: 20px;
@@ -366,7 +389,8 @@ h3 {
 
   .metric-grid,
   .task-grid,
-  .module-grid {
+  .module-grid,
+  .rule-grid {
     grid-template-columns: 1fr;
   }
 

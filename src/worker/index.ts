@@ -2,11 +2,19 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import {
   appLocales,
+  autoDebitPolicy,
+  consolidationOptions,
+  financeLedgerBuckets,
   featureFlags,
   launchMarkets,
+  localShippingFeeRules,
   logisticsLines,
+  packageNumberRules,
   roleMatrix,
+  seoFields,
   serviceBlueprint,
+  supportTicketTypes,
+  warehouseScanSteps,
   workflowStates
 } from "../shared/domain";
 import { getAdminSummary, getMemberOrders, getMemberProfile } from "./repository";
@@ -39,6 +47,20 @@ app.get("/api/config", (c) =>
 );
 
 app.get("/api/catalog/service-blueprint", (c) => c.json(serviceBlueprint));
+
+app.get("/api/catalog/operational-rules", (c) =>
+  c.json({
+    workflowStates,
+    packageNumberRules,
+    localShippingFeeRules,
+    consolidationOptions,
+    autoDebitPolicy,
+    supportTicketTypes,
+    warehouseScanSteps,
+    financeLedgerBuckets,
+    seoFields
+  })
+);
 
 app.get("/api/admin/roles", (c) =>
   c.json({

@@ -28,6 +28,10 @@ import {
   demoOrders,
   roleMatrix,
   serviceBlueprint,
+  packageNumberRules,
+  supportTicketTypes,
+  warehouseScanSteps,
+  seoFields,
   type MemberOrder,
   type Metric
 } from "../shared/domain";
@@ -307,6 +311,34 @@ function App() {
             <p className="body-text">
               MVP 以服務端排程和列表輪詢為主，待訂單量與客服使用節奏穩定後再引入 WebSocket 或 SSE。
             </p>
+          </div>
+
+          <div className="panel main-panel">
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">Rules</p>
+                <h2>基礎規則配置</h2>
+              </div>
+              <Settings size={22} />
+            </div>
+            <div className="rule-grid">
+              <div>
+                <strong>包裹編號</strong>
+                <span>{packageNumberRules.map((rule) => rule.label).join("、")}</span>
+              </div>
+              <div>
+                <strong>客服工單</strong>
+                <span>{supportTicketTypes.slice(0, 4).join("、")} 等</span>
+              </div>
+              <div>
+                <strong>倉庫掃碼</strong>
+                <span>{warehouseScanSteps.join("、")}</span>
+              </div>
+              <div>
+                <strong>SEO 欄位</strong>
+                <span>{seoFields.join("、")}</span>
+              </div>
+            </div>
           </div>
 
           <div className="panel">
