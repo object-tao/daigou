@@ -37,6 +37,20 @@ import {
 } from "../shared/domain";
 import "./styles.css";
 
+type WorkQueue = {
+  tickets: Array<{ id: string; type: string; status: string; priority: string; subject: string }>;
+  scans: Array<{ id: string; packageId: string; step: string; code: string; location: string | null }>;
+  ledger: Array<{ id: string; bucket: string; direction: string; amountHkd: number; amountJpy: number; source: string }>;
+  seo: Array<{ entityType: string; entityId: string; locale: string; title: string; urlSlug: string }>;
+};
+
+const emptyWorkQueue: WorkQueue = {
+  tickets: [],
+  scans: [],
+  ledger: [],
+  seo: []
+};
+
 const memberFlows = [
   { icon: ShoppingCart, title: "代購購物車", text: "Mercari、Rakuma、Amazon Japan 及線下商品可合併提交，保留備註與日本本地運費後補。" },
   { icon: Gavel, title: "Yahoo 人工代拍", text: "會員設定最高出價與扣款授權，客服在授權範圍內人工出價，超額觸發確認。" },
@@ -81,6 +95,7 @@ function App() {
   const [metrics, setMetrics] = useState<Metric[]>(adminMetrics);
   const [orders, setOrders] = useState<MemberOrder[]>(demoOrders);
   const [operations, setOperations] = useState<string[]>(fallbackAdminSummary.operations);
+  const [workQueue, setWorkQueue] = useState<WorkQueue>(emptyWorkQueue);
 
   useEffect(() => {
     void loadJson<{ counters: typeof fallbackAdminSummary.counters; operations: string[] }>(
@@ -99,6 +114,8 @@ function App() {
     void loadJson<{ items: MemberOrder[] }>("/api/member/orders", { items: demoOrders }).then((payload) => {
       setOrders(payload.items);
     });
+
+    void loadJson<WorkQueue>("/api/admin/work-queue", emptyWorkQueue).then(setWorkQueue);
   }, []);
 
   return (
@@ -354,6 +371,34 @@ function App() {
                 <li key={operation}>{operation}</li>
               ))}
             </ul>
+          </div>
+
+          <div className="panel main-panel">
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">Work Queue</p>
+                <h2>後台工作隊列</h2>
+              </div>
+              <ChartNoAxesCombined size={22} />
+            </div>
+            <div className="queue-grid">
+              <div>
+                <strong>Tickets</strong>
+                <span>{workQueue.tickets[0]?.subject ?? "No open ticket"}</span>
+              </div>
+              <div>
+                <strong>Warehouse Scan</strong>
+                <span>{workQueue.scans[0] ? `${workQueue.scans[0].packageId} · ${workQueue.scans[0].step}` : "No scan event"}</span>
+              </div>
+              <div>
+                <strong>Ledger</strong>
+                <span>{workQueue.ledger[0] ? `${workQueue.ledger[0].bucket} · ${workQueue.ledger[0].direction}` : "No ledger entry"}</span>
+              </div>
+              <div>
+                <strong>SEO</strong>
+                <span>{workQueue.seo[0] ? `${workQueue.seo[0].title} · /${workQueue.seo[0].urlSlug}` : "No SEO entry"}</span>
+              </div>
+            </div>
           </div>
         </section>
       </section>

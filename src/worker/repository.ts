@@ -1,7 +1,17 @@
 import {
   adminSummary,
+  autoDebitPolicy,
+  consolidationOptions,
   demoMember,
   demoOrders,
+  financeLedgerBuckets,
+  localShippingFeeRules,
+  logisticsChannelTemplates,
+  packageNumberRules,
+  seoFields,
+  supportTicketTypes,
+  warehouseScanSteps,
+  workflowStates,
   type MemberOrder
 } from "../shared/domain";
 
@@ -56,6 +66,95 @@ type PackageRow = {
 
 type CountRow = {
   count: number;
+};
+
+type StatusDefinitionRow = {
+  order_type: string;
+  code: string;
+  label: string;
+  sort_order: number;
+  is_terminal: number;
+};
+
+type PackageIdentifierRow = {
+  identifier_type: string;
+  identifier_value: string;
+};
+
+type LocalShippingRuleRow = {
+  code: string;
+  label: string;
+  debt_behavior: string;
+  enabled: number;
+};
+
+type ConsolidationOptionRow = {
+  code: string;
+  label: string;
+  fee_type: string;
+  enabled: number;
+};
+
+type LogisticsChannelRow = {
+  code: string;
+  name: string;
+  destination_region: string;
+  transport_mode: string;
+  billing_method: string;
+  restricted_items_json: string;
+  transit_time_note: string | null;
+  weight_limit_gram: number | null;
+  volumetric_formula: string | null;
+  enabled: number;
+};
+
+type AutoDebitRuleRow = {
+  balance_limit_hkd: number;
+  reconfirm_over_hkd: number;
+  credit_allowed: number;
+  insufficient_balance_action: string;
+};
+
+type SupportTicketRow = {
+  id: string;
+  ticket_type: string;
+  status: string;
+  priority: string;
+  subject: string;
+  related_type: string | null;
+  related_id: string | null;
+  updated_at: string;
+};
+
+type WarehouseScanRow = {
+  id: string;
+  package_id: string;
+  scan_step: string;
+  scanned_code: string;
+  location: string | null;
+  created_at: string;
+};
+
+type FinancialLedgerRow = {
+  id: string;
+  bucket: string;
+  direction: string;
+  amount_hkd: number;
+  amount_jpy: number;
+  source_type: string;
+  source_id: string;
+  created_at: string;
+};
+
+type SeoEntryRow = {
+  entity_type: string;
+  entity_id: string;
+  locale: string;
+  title: string;
+  meta_description: string | null;
+  url_slug: string;
+  sitemap_enabled: number;
+  robots_directive: string;
 };
 
 async function first<T>(db: D1Database, sql: string, ...binds: D1Value[]): Promise<T | null> {
@@ -230,5 +329,215 @@ export async function getAdminSummary(db: D1Database) {
     };
   } catch {
     return adminSummary;
+  }
+}
+
+export async function getOperationalRules(db: D1Database) {
+  try {
+    const statuses = await all<StatusDefinitionRow>(
+      db,
+      `SELECT order_type, code, label, sort_order, is_terminal
+         FROM order_status_definitions
+        ORDER BY order_type, sort_order`
+    );
+    const packageIdentifiers = await all<PackageIdentifierRow>(
+      db,
+      `SELECT identifier_type, identifier_value
+         FROM package_identifiers
+        WHERE package_id = ?
+        ORDER BY identifier_type`,
+      "DP-PK-10003"
+    );
+    const localShippingRules = await all<LocalShippingRuleRow>(
+      db,
+      `SELECT code, label, debt_behavior, enabled
+         FROM local_shipping_charge_rules
+        ORDER BY rowid`
+    );
+    const consolidationRules = await all<ConsolidationOptionRow>(
+      db,
+      `SELECT code, label, fee_type, enabled
+         FROM consolidation_option_definitions
+        ORDER BY rowid`
+    );
+    const logisticsChannels = await all<LogisticsChannelRow>(
+      db,
+      `SELECT code,
+              name,
+              destination_region,
+              transport_mode,
+              billing_method,
+              restricted_items_json,
+              transit_time_note,
+              weight_limit_gram,
+              volumetric_formula,
+              enabled
+         FROM logistics_channel_configs
+        ORDER BY rowid`
+    );
+    const debitRule = await first<AutoDebitRuleRow>(
+      db,
+      `SELECT balance_limit_hkd, reconfirm_over_hkd, credit_allowed, insufficient_balance_action
+         FROM auto_debit_rules
+        WHERE enabled = 1
+        ORDER BY updated_at DESC
+        LIMIT 1`
+    );
+
+    return {
+      workflowStates: statuses.reduce<Record<string, Array<{ code: string; label: string; terminal: boolean }>>>(
+        (groups, status) => {
+          groups[status.order_type] ??= [];
+          groups[status.order_type].push({
+            code: status.code,
+            label: status.label,
+            terminal: status.is_terminal === 1
+          });
+          return groups;
+        },
+        {}
+      ),
+      packageNumberRules: packageIdentifiers.length
+        ? packageIdentifiers.map((identifier) => ({
+            code: identifier.identifier_type,
+            label: identifier.identifier_type,
+            example: identifier.identifier_value
+          }))
+        : packageNumberRules,
+      localShippingFeeRules: localShippingRules.length
+        ? localShippingRules.map((rule) => ({
+            code: rule.code,
+            label: rule.label,
+            behavior: rule.debt_behavior,
+            enabled: rule.enabled === 1
+          }))
+        : localShippingFeeRules,
+      consolidationOptions: consolidationRules.length
+        ? consolidationRules.map((option) => ({
+            code: option.code,
+            label: option.label,
+            feeType: option.fee_type,
+            enabled: option.enabled === 1
+          }))
+        : consolidationOptions,
+      logisticsChannelTemplates: logisticsChannels.length
+        ? logisticsChannels.map((line) => ({
+            code: line.code,
+            name: line.name,
+            destination: line.destination_region,
+            mode: line.transport_mode,
+            billingMethod: line.billing_method,
+            restrictedItems: JSON.parse(line.restricted_items_json) as string[],
+            transitTimeNote: line.transit_time_note,
+            weightLimitGram: line.weight_limit_gram,
+            volumetricFormula: line.volumetric_formula,
+            enabled: line.enabled === 1
+          }))
+        : logisticsChannelTemplates,
+      autoDebitPolicy: debitRule
+        ? {
+            balanceLimitHkd: debitRule.balance_limit_hkd,
+            reconfirmOverHkd: debitRule.reconfirm_over_hkd,
+            creditAllowed: debitRule.credit_allowed === 1,
+            insufficientBalanceAction: debitRule.insufficient_balance_action
+          }
+        : autoDebitPolicy,
+      supportTicketTypes,
+      warehouseScanSteps,
+      financeLedgerBuckets,
+      seoFields
+    };
+  } catch {
+    return {
+      workflowStates,
+      packageNumberRules,
+      localShippingFeeRules,
+      consolidationOptions,
+      logisticsChannelTemplates,
+      autoDebitPolicy,
+      supportTicketTypes,
+      warehouseScanSteps,
+      financeLedgerBuckets,
+      seoFields
+    };
+  }
+}
+
+export async function getAdminWorkQueue(db: D1Database) {
+  try {
+    const tickets = await all<SupportTicketRow>(
+      db,
+      `SELECT id, ticket_type, status, priority, subject, related_type, related_id, updated_at
+         FROM support_tickets
+        ORDER BY updated_at DESC
+        LIMIT 10`
+    );
+    const scans = await all<WarehouseScanRow>(
+      db,
+      `SELECT id, package_id, scan_step, scanned_code, location, created_at
+         FROM warehouse_scan_events
+        ORDER BY created_at DESC
+        LIMIT 10`
+    );
+    const ledger = await all<FinancialLedgerRow>(
+      db,
+      `SELECT id, bucket, direction, amount_hkd, amount_jpy, source_type, source_id, created_at
+         FROM financial_ledger_entries
+        ORDER BY created_at DESC
+        LIMIT 10`
+    );
+    const seo = await all<SeoEntryRow>(
+      db,
+      `SELECT entity_type, entity_id, locale, title, meta_description, url_slug, sitemap_enabled, robots_directive
+         FROM seo_entries
+        ORDER BY updated_at DESC
+        LIMIT 10`
+    );
+
+    return {
+      tickets: tickets.map((ticket) => ({
+        id: ticket.id,
+        type: ticket.ticket_type,
+        status: ticket.status,
+        priority: ticket.priority,
+        subject: ticket.subject,
+        related: ticket.related_type && ticket.related_id ? `${ticket.related_type}:${ticket.related_id}` : null,
+        updatedAt: ticket.updated_at
+      })),
+      scans: scans.map((scan) => ({
+        id: scan.id,
+        packageId: scan.package_id,
+        step: scan.scan_step,
+        code: scan.scanned_code,
+        location: scan.location,
+        createdAt: scan.created_at
+      })),
+      ledger: ledger.map((entry) => ({
+        id: entry.id,
+        bucket: entry.bucket,
+        direction: entry.direction,
+        amountHkd: entry.amount_hkd,
+        amountJpy: entry.amount_jpy,
+        source: `${entry.source_type}:${entry.source_id}`,
+        createdAt: entry.created_at
+      })),
+      seo: seo.map((entry) => ({
+        entityType: entry.entity_type,
+        entityId: entry.entity_id,
+        locale: entry.locale,
+        title: entry.title,
+        metaDescription: entry.meta_description,
+        urlSlug: entry.url_slug,
+        sitemapEnabled: entry.sitemap_enabled === 1,
+        robotsDirective: entry.robots_directive
+      }))
+    };
+  } catch {
+    return {
+      tickets: [],
+      scans: [],
+      ledger: [],
+      seo: []
+    };
   }
 }

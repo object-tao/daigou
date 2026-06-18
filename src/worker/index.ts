@@ -2,22 +2,14 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import {
   appLocales,
-  autoDebitPolicy,
-  consolidationOptions,
-  financeLedgerBuckets,
   featureFlags,
   launchMarkets,
-  localShippingFeeRules,
   logisticsLines,
-  packageNumberRules,
   roleMatrix,
-  seoFields,
   serviceBlueprint,
-  supportTicketTypes,
-  warehouseScanSteps,
   workflowStates
 } from "../shared/domain";
-import { getAdminSummary, getMemberOrders, getMemberProfile } from "./repository";
+import { getAdminSummary, getAdminWorkQueue, getMemberOrders, getMemberProfile, getOperationalRules } from "./repository";
 
 type Bindings = Env;
 
@@ -48,19 +40,7 @@ app.get("/api/config", (c) =>
 
 app.get("/api/catalog/service-blueprint", (c) => c.json(serviceBlueprint));
 
-app.get("/api/catalog/operational-rules", (c) =>
-  c.json({
-    workflowStates,
-    packageNumberRules,
-    localShippingFeeRules,
-    consolidationOptions,
-    autoDebitPolicy,
-    supportTicketTypes,
-    warehouseScanSteps,
-    financeLedgerBuckets,
-    seoFields
-  })
-);
+app.get("/api/catalog/operational-rules", async (c) => c.json(await getOperationalRules(c.env.DB)));
 
 app.get("/api/admin/roles", (c) =>
   c.json({
@@ -100,6 +80,8 @@ app.get("/api/logistics/lines", (c) =>
 );
 
 app.get("/api/admin/summary", async (c) => c.json(await getAdminSummary(c.env.DB)));
+
+app.get("/api/admin/work-queue", async (c) => c.json(await getAdminWorkQueue(c.env.DB)));
 
 app.notFound((c) => c.env.ASSETS.fetch(c.req.raw));
 
