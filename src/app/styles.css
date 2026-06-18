@@ -611,6 +611,10 @@ button {
   gap: 24px;
 }
 
+.consumer-content.full-width {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .consumer-main {
   min-width: 0;
 }
@@ -778,6 +782,162 @@ button {
 }
 
 .form-grid button:disabled {
+  background: #8b98aa;
+  cursor: wait;
+}
+
+.procurement-panel {
+  background: #ffffff;
+  border-radius: 10px;
+  min-height: 720px;
+  overflow: hidden;
+}
+
+.procurement-form {
+  display: grid;
+  grid-template-columns: minmax(520px, 1.1fr) minmax(430px, 0.9fr);
+  column-gap: 74px;
+  row-gap: 24px;
+  padding: 30px 48px 58px;
+}
+
+.procurement-column {
+  display: grid;
+  gap: 22px;
+  align-content: start;
+}
+
+.procurement-column-right {
+  padding-top: 78px;
+}
+
+.procurement-field,
+.procurement-upload-row,
+.procurement-summary-row {
+  display: grid;
+  grid-template-columns: 128px minmax(0, 1fr);
+  align-items: center;
+  gap: 18px;
+}
+
+.procurement-label,
+.procurement-summary-row span {
+  color: #050b16;
+  font-size: 18px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.procurement-label b {
+  color: #ff5252;
+  margin-right: 4px;
+}
+
+.procurement-field input,
+.procurement-field select,
+.procurement-remarks {
+  width: 100%;
+  min-height: 50px;
+  border: 0;
+  border-radius: 26px;
+  background: #e8f3ff;
+  color: #1f334a;
+  font-size: 16px;
+  padding: 0 22px;
+  outline: none;
+}
+
+.procurement-field input::placeholder,
+.procurement-remarks::placeholder {
+  color: #b4c2d2;
+}
+
+.procurement-field select {
+  color: #8ca0b8;
+  appearance: none;
+}
+
+.procurement-field input:focus,
+.procurement-field select:focus,
+.procurement-remarks:focus {
+  box-shadow: 0 0 0 3px rgba(18, 184, 223, 0.18);
+}
+
+.procurement-warning {
+  margin: -2px 0 10px 146px;
+  color: #ff5b62;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.procurement-footnote {
+  margin-top: 8px;
+}
+
+.procurement-summary-row {
+  min-height: 58px;
+}
+
+.procurement-summary-row strong {
+  color: #1f334a;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.procurement-upload-row {
+  align-items: start;
+}
+
+.procurement-upload-wrap {
+  display: grid;
+  gap: 24px;
+}
+
+.upload-box {
+  width: 186px;
+  height: 186px;
+  border: 1px dashed #d2d8e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #8a8f99;
+  font-size: 48px;
+  font-weight: 300;
+  line-height: 1;
+  cursor: default;
+}
+
+.upload-hint {
+  margin: 0;
+  color: #29384b;
+  font-size: 15px;
+}
+
+.upload-hint strong {
+  color: #ff5b62;
+}
+
+.procurement-remarks {
+  grid-column: 1 / -1;
+  min-height: 88px;
+  resize: vertical;
+  padding-top: 16px;
+  border-radius: 18px;
+}
+
+.procurement-submit {
+  justify-self: end;
+  min-width: 150px;
+  min-height: 44px;
+  border: 0;
+  border-radius: 24px;
+  background: #12b8df;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 800;
+  padding: 0 26px;
+}
+
+.procurement-submit:disabled {
   background: #8b98aa;
   cursor: wait;
 }
@@ -1149,6 +1309,7 @@ h2 {
   }
 
   .member-profile-card,
+  .procurement-form,
   .form-grid,
   .page-grid,
   .metric-grid,
@@ -1164,6 +1325,14 @@ h2 {
 
   .shell {
     grid-template-columns: 1fr;
+  }
+
+  .procurement-form {
+    padding: 24px;
+  }
+
+  .procurement-column-right {
+    padding-top: 0;
   }
 }
 
@@ -1211,5 +1380,39 @@ h2 {
 
   .order-row {
     display: grid;
+  }
+
+  .procurement-panel {
+    min-height: 0;
+  }
+
+  .procurement-form {
+    padding: 18px 14px 28px;
+  }
+
+  .procurement-field,
+  .procurement-upload-row,
+  .procurement-summary-row {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .procurement-label,
+  .procurement-summary-row span {
+    font-size: 16px;
+  }
+
+  .procurement-warning {
+    margin: -4px 0 6px;
+    font-size: 15px;
+  }
+
+  .upload-box {
+    width: 150px;
+    height: 150px;
+  }
+
+  .procurement-submit {
+    justify-self: stretch;
   }
 }

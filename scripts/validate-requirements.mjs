@@ -235,6 +235,19 @@ const checks = [
       "category-strip",
       "home-footer"
     ]
+  },
+  {
+    name: "consumer procurement request page follows reference workflow",
+    haystacks: ["app", "app"],
+    needles: [
+      "ProcurementRequestPage",
+      "procurement-form",
+      "商品鏈接",
+      "所屬購物平台",
+      "商品圖片",
+      "png/jpg/jpeg",
+      "/api/procurement/orders"
+    ]
   }
 ];
 

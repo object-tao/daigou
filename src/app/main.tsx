@@ -272,7 +272,7 @@ function App() {
           <section className="consumer-workspace">
             <MemberProfileCard />
             {notice !== "Ready" ? <p className="notice" aria-live="polite">{notice}</p> : null}
-            <div className="consumer-content">
+            <div className={`consumer-content ${activeMenu === "member-procurement" ? "full-width" : ""}`}>
               <div className="consumer-main">
                 <MemberPage
                   activeMenu={activeMenu}
@@ -285,7 +285,7 @@ function App() {
                   onSubmitWithId={submitWithId}
                 />
               </div>
-              <RightRail />
+              {activeMenu === "member-procurement" ? null : <RightRail />}
             </div>
           </section>
         </section>
@@ -406,6 +406,8 @@ function MemberPage({
   onSubmit: (path: string, busy: string, message: (result: { id?: string; status?: string; [key: string]: unknown }) => string) => (event: FormEvent<HTMLFormElement>) => void;
   onSubmitWithId: (pathBuilder: (form: FormData) => string, busy: string, message: (result: { id?: string; status?: string; [key: string]: unknown }) => string) => (event: FormEvent<HTMLFormElement>) => void;
 }) {
+  if (activeMenu === "member-procurement") return <ProcurementRequestPage submitting={submitting} onSubmit={onSubmit} />;
+
   const title = memberMenuItems.find((item) => item.id === activeMenu)?.label ?? "我的消息";
   if (activeMenu === "member-home") return <MemberDashboardCard action="全部已讀" title="消息列表"><div className="empty-state">無數據</div></MemberDashboardCard>;
   if (activeMenu === "member-auth") {
@@ -458,6 +460,76 @@ function AdminPage({
 
 function MemberDashboardCard({ title, action, children }: { title: string; action?: string; children: React.ReactNode }) {
   return <section className="member-dashboard-card"><div className="member-card-heading"><h2>{title}</h2>{action ? <button type="button">{action}</button> : null}</div>{children}</section>;
+}
+
+function ProcurementRequestPage({
+  submitting,
+  onSubmit
+}: {
+  submitting: boolean;
+  onSubmit: (path: string, busy: string, message: (result: { id?: string; status?: string; [key: string]: unknown }) => string) => (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <section className="procurement-panel">
+      <form className="procurement-form" onSubmit={onSubmit("/api/procurement/orders", "提交代購...", (result) => `代購單已建立：${result.id}`)}>
+        <div className="procurement-column">
+          <ProcurementField label="商品鏈接" required>
+            <input name="productUrl" placeholder="請輸入商品鏈接" required />
+          </ProcurementField>
+          <ProcurementField label="所屬購物平台">
+            <select name="platform" defaultValue="" required>
+              <option value="" disabled>請選擇平台</option>
+              <option value="Mercari">Mercari</option>
+              <option value="Yahoo Auction">Yahoo 拍賣</option>
+              <option value="Rakuten Rakuma">Rakuten Rakuma</option>
+              <option value="Suruga-ya">駿河屋</option>
+              <option value="Amazon Japan">Amazon Japan</option>
+              <option value="Other">其他平台</option>
+            </select>
+          </ProcurementField>
+          <p className="procurement-warning">如未找到您需要購買的平台，提交訂單後將由客服填寫！</p>
+          <ProcurementField label="規格型號">
+            <input name="spec" placeholder="請輸入規格型號" />
+          </ProcurementField>
+          <ProcurementField label="購買數量" required>
+            <input name="quantity" type="number" min="1" defaultValue="1" placeholder="請輸入購買數量" required />
+          </ProcurementField>
+          <ProcurementField label="日本國內運費">
+            <input name="localShippingJpy" type="number" min="0" placeholder="請輸入日本國內運費" />
+          </ProcurementField>
+          <ProcurementSummary label="商品金額" />
+          <ProcurementSummary label="訂單處理費" />
+          <ProcurementSummary label="總金額" />
+          <p className="procurement-warning procurement-footnote">* 如果下單時產生支付手續費和運費另算。</p>
+        </div>
+        <div className="procurement-column procurement-column-right">
+          <ProcurementField label="商品品名" required>
+            <input name="title" placeholder="請輸入商品品名" required />
+          </ProcurementField>
+          <ProcurementField label="單價(JPY￥)" required>
+            <input name="unitPriceJpy" type="number" min="1" placeholder="請輸入單價(JPY￥)" required />
+          </ProcurementField>
+          <div className="procurement-upload-row">
+            <span className="procurement-label">商品圖片</span>
+            <div className="procurement-upload-wrap">
+              <button className="upload-box" type="button" aria-label="上傳商品圖片">+</button>
+              <p className="upload-hint">請上傳 大小不超過 <strong>5MB</strong> 格式為 <strong>png/jpg/jpeg</strong> 的文件</p>
+            </div>
+          </div>
+          <textarea className="procurement-remarks" name="remarks" placeholder="備註：顏色、尺寸、購買要求可在此補充" />
+          <button className="procurement-submit" disabled={submitting}>{submitting ? "提交中..." : "提交訂單"}</button>
+        </div>
+      </form>
+    </section>
+  );
+}
+
+function ProcurementField({ label, required = false, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+  return <label className="procurement-field"><span className="procurement-label">{required ? <b>*</b> : null}{label}</span>{children}</label>;
+}
+
+function ProcurementSummary({ label }: { label: string }) {
+  return <div className="procurement-summary-row"><span>{label}</span><strong>-</strong></div>;
 }
 
 function AdminFormPanel({ title, icon, children }: { title: string; icon: typeof Home; children: React.ReactNode }) {
