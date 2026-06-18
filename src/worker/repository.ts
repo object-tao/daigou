@@ -157,6 +157,17 @@ type SeoEntryRow = {
   robots_directive: string;
 };
 
+type PaymentRequestRow = {
+  id: string;
+  member_id: string;
+  amount_hkd: number;
+  status: string;
+};
+
+type WalletBalanceRow = {
+  balance_hkd: number;
+};
+
 export type CreateProcurementInput = {
   platform: string;
   productUrl: string;
@@ -177,6 +188,13 @@ export type CreateSupportTicketInput = {
   relatedType?: string;
   relatedId?: string;
   priority?: string;
+};
+
+export type QuoteProcurementInput = {
+  itemAmountJpy: number;
+  localShippingJpy?: number | null;
+  serviceFeeHkd?: number | null;
+  remarks?: string;
 };
 
 async function first<T>(db: D1Database, sql: string, ...binds: D1Value[]): Promise<T | null> {
@@ -689,5 +707,143 @@ export async function createSupportTicket(
   return {
     id,
     status: "open"
+  };
+}
+
+export async function quoteProcurementOrder(
+  db: D1Database,
+  orderId: string,
+  input: QuoteProcurementInput,
+  staffId = "staff-admin-demo"
+) {
+  const order = await first<{ id: string; member_id: string; status: string }>(
+    db,
+    "SELECT id, member_id, status FROM procurement_orders WHERE id = ?",
+    orderId
+  );
+
+  if (!order) {
+    throw new Error("Procurement order not found");
+  }
+
+  const itemAmountJpy = Math.trunc(input.itemAmountJpy);
+  const localShippingJpy = input.localShippingJpy === null || input.localShippingJpy === undefined
+    ? null
+    : Math.trunc(input.localShippingJpy);
+  const serviceFeeHkd = input.serviceFeeHkd === null || input.serviceFeeHkd === undefined
+    ? null
+    : Math.trunc(input.serviceFeeHkd);
+
+  await run(
+    db,
+    `UPDATE procurement_orders
+        SET item_amount_jpy = ?,
+            local_shipping_jpy = ?,
+            service_fee_hkd = ?,
+            status = ?,
+            remarks = COALESCE(?, remarks),
+            updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?`,
+    itemAmountJpy,
+    localShippingJpy,
+    serviceFeeHkd,
+    "pending_payment",
+    input.remarks ?? null,
+    orderId
+  );
+  await writeAuditLog(db, "staff", staffId, "procurement_order.quote", "procurement_order", orderId, {
+    previousStatus: order.status,
+    nextStatus: "pending_payment",
+    itemAmountJpy,
+    localShippingJpy,
+    serviceFeeHkd
+  });
+
+  return {
+    id: orderId,
+    status: "pending_payment"
+  };
+}
+
+export async function approvePaymentRequest(
+  db: D1Database,
+  paymentRequestId: string,
+  staffId = "staff-finance-demo"
+) {
+  const payment = await first<PaymentRequestRow>(
+    db,
+    "SELECT id, member_id, amount_hkd, status FROM payment_requests WHERE id = ?",
+    paymentRequestId
+  );
+
+  if (!payment) {
+    throw new Error("Payment request not found");
+  }
+
+  if (payment.status !== "pending_review") {
+    throw new Error("Payment request is not pending review");
+  }
+
+  const wallet = await first<WalletBalanceRow>(
+    db,
+    "SELECT balance_hkd FROM wallets WHERE member_id = ?",
+    payment.member_id
+  );
+  const balanceAfterHkd = Number(wallet?.balance_hkd ?? 0) + payment.amount_hkd;
+
+  if (wallet) {
+    await run(
+      db,
+      "UPDATE wallets SET balance_hkd = ?, updated_at = CURRENT_TIMESTAMP WHERE member_id = ?",
+      balanceAfterHkd,
+      payment.member_id
+    );
+  } else {
+    await run(
+      db,
+      "INSERT INTO wallets (id, member_id, balance_hkd, commission_balance_hkd) VALUES (?, ?, ?, ?)",
+      createId("wallet"),
+      payment.member_id,
+      balanceAfterHkd,
+      0
+    );
+  }
+
+  await run(
+    db,
+    `UPDATE payment_requests
+        SET status = ?,
+            reviewed_by = ?,
+            reviewed_at = CURRENT_TIMESTAMP
+      WHERE id = ?`,
+    "approved",
+    staffId,
+    paymentRequestId
+  );
+  await run(
+    db,
+    `INSERT INTO financial_ledger_entries (
+      id, member_id, bucket, direction, amount_hkd, amount_jpy, source_type, source_id, balance_after_hkd, note
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    createId("ledger"),
+    payment.member_id,
+    "會員餘額",
+    "credit",
+    payment.amount_hkd,
+    0,
+    "payment_request",
+    paymentRequestId,
+    balanceAfterHkd,
+    "銀行轉帳人工審核入帳"
+  );
+  await writeAuditLog(db, "staff", staffId, "payment_request.approve", "payment_request", paymentRequestId, {
+    amountHkd: payment.amount_hkd,
+    balanceAfterHkd
+  });
+
+  return {
+    id: paymentRequestId,
+    status: "approved",
+    balanceAfterHkd
   };
 }

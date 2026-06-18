@@ -88,6 +88,18 @@ const checks = [
     name: "H5 exposes MVP member write forms",
     haystacks: ["app", "apiContract"],
     needles: ["提交代購", "銀行轉帳充值", "提交工單", "會員提交入口"]
+  },
+  {
+    name: "Admin APIs close quote and bank-transfer review loop",
+    haystacks: ["api", "repository", "apiContract"],
+    needles: [
+      "POST /api/admin/procurement/orders/:id/quote",
+      "POST /api/admin/payments/:id/approve",
+      "quoteProcurementOrder",
+      "approvePaymentRequest",
+      "pending_payment",
+      "financial_ledger_entries"
+    ]
   }
 ];
 

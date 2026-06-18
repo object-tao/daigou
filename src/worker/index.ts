@@ -11,6 +11,7 @@ import {
   workflowStates
 } from "../shared/domain";
 import {
+  approvePaymentRequest,
   createPaymentRequest,
   createProcurementOrder,
   createSupportTicket,
@@ -18,7 +19,8 @@ import {
   getAdminWorkQueue,
   getMemberOrders,
   getMemberProfile,
-  getOperationalRules
+  getOperationalRules,
+  quoteProcurementOrder
 } from "./repository";
 
 type Bindings = Env;
@@ -184,6 +186,45 @@ app.post("/api/support/tickets", async (c) => {
   });
 
   return c.json(ticket, 201);
+});
+
+app.post("/api/admin/procurement/orders/:id/quote", async (c) => {
+  const body = await readJsonBody(c);
+
+  if (!body) {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+
+  const itemAmountJpy = numberField(body, "itemAmountJpy");
+  const localShippingJpy = numberField(body, "localShippingJpy");
+  const serviceFeeHkd = numberField(body, "serviceFeeHkd");
+  const remarks = textField(body, "remarks") ?? undefined;
+
+  if (!itemAmountJpy || itemAmountJpy <= 0) {
+    return c.json({ error: "positive itemAmountJpy is required" }, 400);
+  }
+
+  try {
+    const result = await quoteProcurementOrder(c.env.DB, c.req.param("id"), {
+      itemAmountJpy,
+      localShippingJpy,
+      serviceFeeHkd,
+      remarks
+    });
+
+    return c.json(result);
+  } catch (error) {
+    return c.json({ error: error instanceof Error ? error.message : "Quote failed" }, 400);
+  }
+});
+
+app.post("/api/admin/payments/:id/approve", async (c) => {
+  try {
+    const result = await approvePaymentRequest(c.env.DB, c.req.param("id"));
+    return c.json(result);
+  } catch (error) {
+    return c.json({ error: error instanceof Error ? error.message : "Approval failed" }, 400);
+  }
 });
 
 app.get("/api/logistics/lines", (c) =>

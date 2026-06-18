@@ -79,6 +79,18 @@
 - 來源：D1 `support_tickets`、`warehouse_scan_events`、`financial_ledger_entries`、`seo_entries`。
 - 用途：後台首頁展示客服、倉庫、財務、SEO 的待處理工作。
 
+## 後台寫入動作
+
+- `POST /api/admin/procurement/orders/:id/quote`
+- 用途：客服或管理員對人工代購訂單報價，訂單進入 `pending_payment`。
+- 必填：`itemAmountJpy`。
+- 可選：`localShippingJpy`、`serviceFeeHkd`、`remarks`。
+- 寫入：`procurement_orders`、`audit_logs`。
+
+- `POST /api/admin/payments/:id/approve`
+- 用途：財務審核銀行轉帳充值，入帳到會員港幣餘額。
+- 寫入：`payment_requests`、`wallets`、`financial_ledger_entries`、`audit_logs`。
+
 ## 物流
 
 - `GET /api/logistics/lines`
