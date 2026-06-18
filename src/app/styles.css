@@ -266,6 +266,39 @@ h3 {
   line-height: 1.5;
 }
 
+.order-list {
+  display: grid;
+  gap: 10px;
+}
+
+.order-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: center;
+  border: 1px solid #e5ebf3;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.order-row strong,
+.order-row span {
+  display: block;
+}
+
+.order-row span {
+  color: #52657d;
+  margin-top: 4px;
+}
+
+.order-row mark {
+  background: #fff2cf;
+  color: #6d4b00;
+  border-radius: 8px;
+  padding: 6px 8px;
+  white-space: nowrap;
+}
+
 .check-list,
 .timeline {
   padding-left: 20px;
@@ -335,5 +368,14 @@ h3 {
   .task-grid,
   .module-grid {
     grid-template-columns: 1fr;
+  }
+
+  .order-row {
+    display: grid;
+  }
+
+  .order-row mark {
+    justify-self: start;
+    white-space: normal;
   }
 }

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Bell,
@@ -22,20 +22,16 @@ import {
   Users,
   WalletCards
 } from "lucide-react";
+import {
+  adminMetrics,
+  adminSummary as fallbackAdminSummary,
+  demoOrders,
+  roleMatrix,
+  serviceBlueprint,
+  type MemberOrder,
+  type Metric
+} from "../shared/domain";
 import "./styles.css";
-
-type Metric = {
-  label: string;
-  value: string;
-  tone: "blue" | "green" | "amber" | "red";
-};
-
-const metrics: Metric[] = [
-  { label: "待報價", value: "18", tone: "amber" },
-  { label: "代拍中", value: "7", tone: "blue" },
-  { label: "入庫包裹", value: "42", tone: "green" },
-  { label: "退款審核", value: "3", tone: "red" }
-];
 
 const memberFlows = [
   { icon: ShoppingCart, title: "代購購物車", text: "Mercari、Rakuma、Amazon Japan 及線下商品可合併提交，保留備註與日本本地運費後補。" },
@@ -63,14 +59,44 @@ const adminModules = [
   "售後審核"
 ];
 
-const roleRows = [
-  ["客服", "報價、會員溝通、售後申請、通知發送"],
-  ["倉庫", "入庫、合箱、出庫、一件直發、增值服務"],
-  ["財務", "銀行轉帳、人工匯率、餘額調整、退款"],
-  ["營運", "團購、優惠券、會員等級、多語內容"]
-];
+async function loadJson<T>(path: string, fallback: T): Promise<T> {
+  try {
+    const response = await fetch(path, { headers: { Accept: "application/json" } });
+
+    if (!response.ok) {
+      return fallback;
+    }
+
+    return (await response.json()) as T;
+  } catch {
+    return fallback;
+  }
+}
 
 function App() {
+  const [metrics, setMetrics] = useState<Metric[]>(adminMetrics);
+  const [orders, setOrders] = useState<MemberOrder[]>(demoOrders);
+  const [operations, setOperations] = useState<string[]>(fallbackAdminSummary.operations);
+
+  useEffect(() => {
+    void loadJson<{ counters: typeof fallbackAdminSummary.counters; operations: string[] }>(
+      "/api/admin/summary",
+      fallbackAdminSummary
+    ).then((summary) => {
+      setMetrics([
+        { label: "待報價", value: String(summary.counters.pendingQuotes), tone: "amber" },
+        { label: "代拍中", value: String(summary.counters.auctionBids), tone: "blue" },
+        { label: "入庫包裹", value: String(summary.counters.inboundPackages), tone: "green" },
+        { label: "退款審核", value: String(summary.counters.refundReviews), tone: "red" }
+      ]);
+      setOperations(summary.operations);
+    });
+
+    void loadJson<{ items: MemberOrder[] }>("/api/member/orders", { items: demoOrders }).then((payload) => {
+      setOrders(payload.items);
+    });
+  }, []);
+
   return (
     <main className="shell">
       <aside className="sidebar" aria-label="主導航">
@@ -188,10 +214,10 @@ function App() {
               <Users size={22} />
             </div>
             <div className="role-list">
-              {roleRows.map(([role, scope]) => (
-                <div className="role-row" key={role}>
-                  <strong>{role}</strong>
-                  <span>{scope}</span>
+              {roleMatrix.filter((role) => role.role !== "super_admin").map((role) => (
+                <div className="role-row" key={role.role}>
+                  <strong>{role.label}</strong>
+                  <span>{role.scope}</span>
                 </div>
               ))}
             </div>
@@ -206,8 +232,29 @@ function App() {
               <TicketPercent size={22} />
             </div>
             <p className="body-text">
-              支援五級會員、推薦佣金、代購商品積分與物流費用積分。積分兌換以公司提供商品為主，開團者獎勵和優惠券限制由後台配置。
+              支援 {serviceBlueprint.memberLevels.length} 級會員、推薦佣金、代購商品積分與物流費用積分。積分兌換以公司提供商品為主，開團者獎勵和優惠券限制由後台配置。
             </p>
+          </div>
+
+          <div className="panel main-panel">
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">Live Orders</p>
+                <h2>會員訂單樣例</h2>
+              </div>
+              <ClipboardList size={22} />
+            </div>
+            <div className="order-list">
+              {orders.map((order) => (
+                <article className="order-row" key={order.id}>
+                  <div>
+                    <strong>{order.id}</strong>
+                    <span>{order.type} · {order.platform ?? order.warehouse}</span>
+                  </div>
+                  <mark>{order.status}</mark>
+                </article>
+              ))}
+            </div>
           </div>
 
           <div className="panel">
@@ -260,6 +307,21 @@ function App() {
             <p className="body-text">
               MVP 以服務端排程和列表輪詢為主，待訂單量與客服使用節奏穩定後再引入 WebSocket 或 SSE。
             </p>
+          </div>
+
+          <div className="panel">
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">Runbook</p>
+                <h2>待處理運營動作</h2>
+              </div>
+              <ChartNoAxesCombined size={22} />
+            </div>
+            <ul className="check-list">
+              {operations.slice(0, 5).map((operation) => (
+                <li key={operation}>{operation}</li>
+              ))}
+            </ul>
           </div>
         </section>
       </section>
