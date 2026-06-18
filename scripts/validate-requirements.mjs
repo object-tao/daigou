@@ -92,13 +92,13 @@ const checks = [
     name: "H5 separates consumer portal and admin console menus",
     haystacks: ["app"],
     needles: [
-      "memberMenus",
+      "memberGroups",
       "adminMenus",
       "會員前台",
       "管理後台",
-      "人工代購",
-      "充值與餘額",
-      "包裹與增值",
+      "提交隨意購",
+      "付款請求",
+      "入庫包裹管理",
       "代購報價",
       "採購入庫預報",
       "入庫與無主件",
@@ -205,8 +205,22 @@ const checks = [
       "/api/value-added-services",
       "/api/aftersales/requests",
       "/api/admin/seo",
-      "會員積分",
+      "我的積分",
       "匯出與附件"
+    ]
+  },
+  {
+    name: "consumer portal follows grouped account-center layout",
+    haystacks: ["app", "app"],
+    needles: [
+      "個人中心",
+      "訂單中心",
+      "財務中心",
+      "帳號設置",
+      "最新公告",
+      "常見問題",
+      "聯繫我們",
+      "商品搜索"
     ]
   }
 ];
