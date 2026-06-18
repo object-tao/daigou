@@ -41,6 +41,25 @@
 - `GET /api/member/orders`
 - 來源：D1 `procurement_orders`、`auction_orders`、`inbound_packages`、`warehouses`。
 
+## 會員寫入動作
+
+- `POST /api/procurement/orders`
+- 用途：會員提交人工代購需求，狀態進入 `pending_quote`。
+- 必填：`platform`、`productUrl`、`title`、`quantity`。
+- 寫入：`procurement_orders`、`audit_logs`。
+
+- `POST /api/payments/bank-transfer-requests`
+- 用途：會員提交銀行轉帳充值申請，等待財務人工審核。
+- 必填：`amountHkd`。
+- 可選：`proofUrl`。
+- 寫入：`payment_requests`、`audit_logs`。
+
+- `POST /api/support/tickets`
+- 用途：會員提交客服工單，支持售後、補款、退款、查件、包裹異常、商品損壞、少件漏件。
+- 必填：`ticketType`、`subject`、`description`。
+- 可選：`relatedType`、`relatedId`、`priority`。
+- 寫入：`support_tickets`、`audit_logs`。
+
 ## 後台
 
 - `GET /api/admin/roles`

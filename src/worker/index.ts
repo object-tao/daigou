@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import type { Context } from "hono";
 import {
   appLocales,
   featureFlags,
@@ -9,13 +10,45 @@ import {
   serviceBlueprint,
   workflowStates
 } from "../shared/domain";
-import { getAdminSummary, getAdminWorkQueue, getMemberOrders, getMemberProfile, getOperationalRules } from "./repository";
+import {
+  createPaymentRequest,
+  createProcurementOrder,
+  createSupportTicket,
+  getAdminSummary,
+  getAdminWorkQueue,
+  getMemberOrders,
+  getMemberProfile,
+  getOperationalRules
+} from "./repository";
 
 type Bindings = Env;
 
 const app = new Hono<{ Bindings: Bindings }>();
 
 app.use("/api/*", cors());
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function textField(body: Record<string, unknown>, field: string): string | null {
+  const value = body[field];
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
+function numberField(body: Record<string, unknown>, field: string): number | null {
+  const value = body[field];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+async function readJsonBody(c: Context<{ Bindings: Bindings }>) {
+  try {
+    const body = await c.req.json();
+    return isRecord(body) ? body : null;
+  } catch {
+    return null;
+  }
+}
 
 app.get("/api/health", (c) =>
   c.json({
@@ -72,6 +105,86 @@ app.get("/api/member/orders", async (c) =>
     items: await getMemberOrders(c.env.DB)
   })
 );
+
+app.post("/api/procurement/orders", async (c) => {
+  const body = await readJsonBody(c);
+
+  if (!body) {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+
+  const platform = textField(body, "platform");
+  const productUrl = textField(body, "productUrl");
+  const title = textField(body, "title");
+  const quantity = numberField(body, "quantity") ?? 1;
+  const remarks = textField(body, "remarks") ?? undefined;
+
+  if (!platform || !productUrl || !title || quantity < 1) {
+    return c.json({ error: "platform, productUrl, title and positive quantity are required" }, 400);
+  }
+
+  const order = await createProcurementOrder(c.env.DB, {
+    platform,
+    productUrl,
+    title,
+    quantity,
+    remarks
+  });
+
+  return c.json(order, 201);
+});
+
+app.post("/api/payments/bank-transfer-requests", async (c) => {
+  const body = await readJsonBody(c);
+
+  if (!body) {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+
+  const amountHkd = numberField(body, "amountHkd");
+  const proofUrl = textField(body, "proofUrl") ?? undefined;
+
+  if (!amountHkd || amountHkd <= 0) {
+    return c.json({ error: "positive amountHkd is required" }, 400);
+  }
+
+  const payment = await createPaymentRequest(c.env.DB, {
+    amountHkd,
+    proofUrl
+  });
+
+  return c.json(payment, 201);
+});
+
+app.post("/api/support/tickets", async (c) => {
+  const body = await readJsonBody(c);
+
+  if (!body) {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+
+  const ticketType = textField(body, "ticketType");
+  const subject = textField(body, "subject");
+  const description = textField(body, "description");
+  const relatedType = textField(body, "relatedType") ?? undefined;
+  const relatedId = textField(body, "relatedId") ?? undefined;
+  const priority = textField(body, "priority") ?? undefined;
+
+  if (!ticketType || !subject || !description) {
+    return c.json({ error: "ticketType, subject and description are required" }, 400);
+  }
+
+  const ticket = await createSupportTicket(c.env.DB, {
+    ticketType,
+    subject,
+    description,
+    relatedType,
+    relatedId,
+    priority
+  });
+
+  return c.json(ticket, 201);
+});
 
 app.get("/api/logistics/lines", (c) =>
   c.json({

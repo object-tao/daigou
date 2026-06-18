@@ -157,6 +157,28 @@ type SeoEntryRow = {
   robots_directive: string;
 };
 
+export type CreateProcurementInput = {
+  platform: string;
+  productUrl: string;
+  title: string;
+  quantity: number;
+  remarks?: string;
+};
+
+export type CreatePaymentRequestInput = {
+  amountHkd: number;
+  proofUrl?: string;
+};
+
+export type CreateSupportTicketInput = {
+  ticketType: string;
+  subject: string;
+  description: string;
+  relatedType?: string;
+  relatedId?: string;
+  priority?: string;
+};
+
 async function first<T>(db: D1Database, sql: string, ...binds: D1Value[]): Promise<T | null> {
   return db.prepare(sql).bind(...binds).first<T>();
 }
@@ -169,6 +191,37 @@ async function all<T>(db: D1Database, sql: string, ...binds: D1Value[]): Promise
 async function count(db: D1Database, sql: string, ...binds: D1Value[]): Promise<number> {
   const row = await first<CountRow>(db, sql, ...binds);
   return Number(row?.count ?? 0);
+}
+
+async function run(db: D1Database, sql: string, ...binds: D1Value[]) {
+  return db.prepare(sql).bind(...binds).run();
+}
+
+function createId(prefix: string): string {
+  return `${prefix}-${crypto.randomUUID()}`;
+}
+
+async function writeAuditLog(
+  db: D1Database,
+  actorType: string,
+  actorId: string,
+  action: string,
+  entityType: string,
+  entityId: string,
+  metadata: Record<string, unknown> = {}
+) {
+  await run(
+    db,
+    `INSERT INTO audit_logs (id, actor_type, actor_id, action, entity_type, entity_id, metadata_json)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    createId("audit"),
+    actorType,
+    actorId,
+    action,
+    entityType,
+    entityId,
+    JSON.stringify(metadata)
+  );
 }
 
 function statusLabel(status: string): string {
@@ -540,4 +593,101 @@ export async function getAdminWorkQueue(db: D1Database) {
       seo: []
     };
   }
+}
+
+export async function createProcurementOrder(
+  db: D1Database,
+  input: CreateProcurementInput,
+  memberId = "demo-member"
+) {
+  const id = createId("DP-PO");
+  const quantity = Math.max(1, Math.trunc(input.quantity || 1));
+
+  await run(
+    db,
+    `INSERT INTO procurement_orders (
+      id, member_id, platform, product_url, title, quantity, status, remarks
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    id,
+    memberId,
+    input.platform,
+    input.productUrl,
+    input.title,
+    quantity,
+    "pending_quote",
+    input.remarks ?? null
+  );
+  await writeAuditLog(db, "member", memberId, "procurement_order.create", "procurement_order", id, {
+    platform: input.platform,
+    quantity
+  });
+
+  return {
+    id,
+    status: "pending_quote"
+  };
+}
+
+export async function createPaymentRequest(
+  db: D1Database,
+  input: CreatePaymentRequestInput,
+  memberId = "demo-member"
+) {
+  const id = createId("pay");
+  const amountHkd = Math.trunc(input.amountHkd);
+
+  await run(
+    db,
+    `INSERT INTO payment_requests (id, member_id, method, amount_hkd, status, proof_url)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    id,
+    memberId,
+    "bank_transfer",
+    amountHkd,
+    "pending_review",
+    input.proofUrl ?? null
+  );
+  await writeAuditLog(db, "member", memberId, "payment_request.create", "payment_request", id, {
+    method: "bank_transfer",
+    amountHkd
+  });
+
+  return {
+    id,
+    status: "pending_review"
+  };
+}
+
+export async function createSupportTicket(
+  db: D1Database,
+  input: CreateSupportTicketInput,
+  memberId = "demo-member"
+) {
+  const id = createId("ticket");
+
+  await run(
+    db,
+    `INSERT INTO support_tickets (
+      id, member_id, ticket_type, related_type, related_id, status, priority, subject, description
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    id,
+    memberId,
+    input.ticketType,
+    input.relatedType ?? null,
+    input.relatedId ?? null,
+    "open",
+    input.priority ?? "normal",
+    input.subject,
+    input.description
+  );
+  await writeAuditLog(db, "member", memberId, "support_ticket.create", "support_ticket", id, {
+    ticketType: input.ticketType,
+    relatedType: input.relatedType ?? null,
+    relatedId: input.relatedId ?? null
+  });
+
+  return {
+    id,
+    status: "open"
+  };
 }

@@ -70,6 +70,19 @@ const checks = [
     name: "API exposes operational rules and work queue",
     haystacks: ["api", "repository", "apiContract"],
     needles: ["/api/catalog/operational-rules", "/api/admin/work-queue", "getOperationalRules", "getAdminWorkQueue"]
+  },
+  {
+    name: "API supports MVP member write actions with audit logs",
+    haystacks: ["api", "repository", "apiContract"],
+    needles: [
+      "POST /api/procurement/orders",
+      "POST /api/payments/bank-transfer-requests",
+      "POST /api/support/tickets",
+      "createProcurementOrder",
+      "createPaymentRequest",
+      "createSupportTicket",
+      "audit_logs"
+    ]
   }
 ];
 
