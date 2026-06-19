@@ -638,6 +638,40 @@ button {
   text-align: center;
 }
 
+.points-box small {
+  display: block;
+  margin-top: 6px;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.summary-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  padding: 24px 24px 0;
+}
+
+.summary-strip div {
+  min-height: 84px;
+  display: grid;
+  align-content: center;
+  gap: 6px;
+  border: 1px solid rgba(219, 231, 241, 0.9);
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(14, 156, 255, 0.1), rgba(255, 133, 0, 0.08));
+  padding: 16px;
+}
+
+.summary-strip span {
+  color: var(--dp-muted);
+  font-size: 13px;
+}
+
+.summary-strip strong {
+  color: var(--dp-ink);
+  font-size: 20px;
+}
+
 .consumer-content {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 386px;
@@ -783,6 +817,22 @@ button {
   display: grid;
   gap: 10px;
   align-content: start;
+}
+
+.admin-queue {
+  border: 1px solid #edf0f3;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 16px;
+}
+
+.admin-queue h3 {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+
+.admin-queue .order-list {
+  padding: 0;
 }
 
 .form-grid h3 {

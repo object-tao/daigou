@@ -28,7 +28,7 @@ import {
 import {
   adminMetrics,
   adminSummary as fallbackAdminSummary,
-  demoOrders,
+  demoMember,
   packageNumberRules,
   roleMatrix,
   seoFields,
@@ -54,9 +54,45 @@ type WorkQueue = {
   seo: Array<{ entityType: string; entityId: string; locale: string; title: string; urlSlug: string }>;
   shipments: Array<{ id: string; lineCode: string; status: string; trackingNo: string | null; packageCount: number }>;
   trackingEvents: Array<{ id: string; shipmentId: string; status: string; location: string | null; description: string }>;
+  procurementOrders: Array<{ id: string; memberId: string; platform: string; title: string; quantity: number; status: string; itemAmountJpy: number | null; localShippingJpy: number | null; serviceFeeHkd: number | null; updatedAt: string }>;
+  paymentRequests: Array<{ id: string; memberId: string; amountHkd: number; status: string; proofUrl: string | null; createdAt: string | null }>;
+  inboundPackages: Array<{ id: string; memberId: string | null; warehouse: string; status: string; ownerStatus: string; trackingNo: string | null; weightGram: number | null; volumeCm3: number | null; updatedAt: string }>;
+  aftersales: Array<{ id: string; memberId: string; orderType: string; orderId: string; requestType: string; status: string; reason: string; createdAt: string }>;
+  valueAddedServices: Array<{ id: string; packageId: string; serviceType: string; status: string; feeHkd: number | null; createdAt: string }>;
 };
 
-const emptyWorkQueue: WorkQueue = { tickets: [], scans: [], ledger: [], seo: [], shipments: [], trackingEvents: [] };
+type MemberProfile = typeof demoMember;
+type MemberGrowth = {
+  levels: Array<{ code: string; name: string; rank: number; upgradeRule: unknown; benefit: unknown }>;
+  totals: { cumulativeSpendingHkd: number; cumulativeFreightHkd: number; topupAmountHkd: number; orderCount: number };
+  points: { procurement: number; logistics: number };
+  commissionHkd: number;
+};
+type MemberLedgerEntry = { id: string; bucket: string; direction: string; amountHkd: number; amountJpy: number; source: string; balanceAfterHkd: number | null; note: string | null; createdAt: string };
+type MemberPackage = { id: string; warehouse: string; status: string; ownerStatus: string; trackingNo: string | null; weightGram: number | null; volumeCm3: number | null; freeStorageUntil: string | null; updatedAt: string; valueAddedServices: Array<{ id: string; serviceType: string; status: string; feeHkd: number | null; createdAt: string }> };
+type MemberShipment = { id: string; lineCode: string; status: string; cartonFeeHkd: number; freightFeeHkd: number | null; trackingNo: string | null; packageCount: number; updatedAt: string };
+type MemberTrackingEvent = { id: string; shipmentId: string; status: string; location: string | null; description: string; occurredAt: string };
+type MemberTicket = { id: string; type: string; status: string; priority: string; subject: string; related: string | null; updatedAt: string };
+
+const emptyWorkQueue: WorkQueue = {
+  tickets: [],
+  scans: [],
+  ledger: [],
+  seo: [],
+  shipments: [],
+  trackingEvents: [],
+  procurementOrders: [],
+  paymentRequests: [],
+  inboundPackages: [],
+  aftersales: [],
+  valueAddedServices: []
+};
+const emptyGrowth: MemberGrowth = {
+  levels: [],
+  totals: { cumulativeSpendingHkd: 0, cumulativeFreightHkd: 0, topupAmountHkd: 0, orderCount: 0 },
+  points: { procurement: 0, logistics: 0 },
+  commissionHkd: 0
+};
 
 const memberGroups: MenuGroup[] = [
   {
@@ -126,6 +162,18 @@ const adminMenus: MenuItem[] = [
 ];
 
 const memberMenuItems = memberGroups.flatMap((group) => group.items);
+const adminMenuAccess: Record<string, string[]> = {
+  super_admin: adminMenus.map((menu) => menu.id),
+  customer_service: ["admin-dashboard", "admin-auth", "admin-quotes", "admin-auction", "admin-finance"],
+  warehouse: ["admin-dashboard", "admin-auth", "admin-purchasing", "admin-inbound", "admin-consolidation", "admin-tracking", "admin-rules"],
+  finance: ["admin-dashboard", "admin-auth", "admin-finance", "admin-export"],
+  operator: ["admin-dashboard", "admin-auth", "admin-roles", "admin-content", "admin-rules"]
+};
+function getVisibleAdminMenus(session: SessionPayload["session"]) {
+  if (session?.actorType !== "staff") return adminMenus.filter((menu) => ["admin-dashboard", "admin-auth"].includes(menu.id));
+  const allowed = adminMenuAccess[session.roleName ?? ""] ?? adminMenuAccess.super_admin;
+  return adminMenus.filter((menu) => allowed.includes(menu.id));
+}
 const marketplacePlatforms = ["mercari", "Rakuten Rakuma", "駿河屋", "amazon", "animate", "Yahoo フリマ", "ZOZOTOWN", "更多"];
 const homeCategories = ["遊戲玩具", "智能設備", "運動用品", "家具家居", "時尚潮流", "書刊漫畫", "美容化妝", "嬰幼兒童", "精品雜貨"];
 const dailyProducts = [
@@ -168,21 +216,37 @@ function App() {
   const [activeMenu, setActiveMenu] = useState("member-home");
   const [session, setSession] = useState<SessionPayload["session"]>(null);
   const [metrics, setMetrics] = useState<Metric[]>(adminMetrics);
-  const [orders, setOrders] = useState<MemberOrder[]>(demoOrders);
+  const [memberProfile, setMemberProfile] = useState<MemberProfile>(demoMember);
+  const [memberGrowth, setMemberGrowth] = useState<MemberGrowth>(emptyGrowth);
+  const [orders, setOrders] = useState<MemberOrder[]>([]);
+  const [memberLedger, setMemberLedger] = useState<MemberLedgerEntry[]>([]);
+  const [memberPackages, setMemberPackages] = useState<MemberPackage[]>([]);
+  const [memberShipments, setMemberShipments] = useState<MemberShipment[]>([]);
+  const [memberTrackingEvents, setMemberTrackingEvents] = useState<MemberTrackingEvent[]>([]);
+  const [memberTickets, setMemberTickets] = useState<MemberTicket[]>([]);
   const [operations, setOperations] = useState<string[]>(fallbackAdminSummary.operations);
   const [workQueue, setWorkQueue] = useState<WorkQueue>(emptyWorkQueue);
   const [notice, setNotice] = useState("Ready");
   const [submitting, setSubmitting] = useState(false);
+  const visibleAdminMenus = getVisibleAdminMenus(session);
   const adminTitle = adminMenus.find((menu) => menu.id === activeMenu)?.label ?? "DropPilot";
 
   async function refreshData() {
-    const [me, summary, orderPayload, queuePayload] = await Promise.all([
+    const [me, profile, growth, summary, orderPayload, ledgerPayload, packagePayload, shipmentPayload, ticketPayload, queuePayload] = await Promise.all([
       loadJson<SessionPayload>("/api/auth/me", { session: null }),
+      loadJson<MemberProfile>("/api/member/me", demoMember),
+      loadJson<MemberGrowth>("/api/member/growth", emptyGrowth),
       loadJson<{ counters: typeof fallbackAdminSummary.counters; operations: string[] }>("/api/admin/summary", fallbackAdminSummary),
-      loadJson<{ items: MemberOrder[] }>("/api/member/orders", { items: demoOrders }),
+      loadJson<{ items: MemberOrder[] }>("/api/member/orders", { items: [] }),
+      loadJson<{ items: MemberLedgerEntry[] }>("/api/member/ledger", { items: [] }),
+      loadJson<{ items: MemberPackage[] }>("/api/member/packages", { items: [] }),
+      loadJson<{ items: MemberShipment[]; trackingEvents: MemberTrackingEvent[] }>("/api/member/shipments", { items: [], trackingEvents: [] }),
+      loadJson<{ items: MemberTicket[] }>("/api/member/tickets", { items: [] }),
       loadJson<WorkQueue>("/api/admin/work-queue", emptyWorkQueue)
     ]);
     setSession(me.session);
+    setMemberProfile(profile);
+    setMemberGrowth(growth);
     setMetrics([
       { label: "待報價", value: String(summary.counters.pendingQuotes), tone: "amber" },
       { label: "代拍中", value: String(summary.counters.auctionBids), tone: "blue" },
@@ -191,6 +255,11 @@ function App() {
     ]);
     setOperations(summary.operations);
     setOrders(orderPayload.items);
+    setMemberLedger(ledgerPayload.items);
+    setMemberPackages(packagePayload.items);
+    setMemberShipments(shipmentPayload.items);
+    setMemberTrackingEvents(shipmentPayload.trackingEvents);
+    setMemberTickets(ticketPayload.items);
     setWorkQueue(queuePayload);
   }
 
@@ -271,14 +340,19 @@ function App() {
         <section className="consumer-body">
           <MemberSidebar activeMenu={activeMenu} onSelect={setActiveMenu} />
           <section className="consumer-workspace">
-            <MemberProfileCard />
+            <MemberProfileCard profile={memberProfile} growth={memberGrowth} />
             {notice !== "Ready" ? <p className="notice" aria-live="polite">{notice}</p> : null}
             <div className={`consumer-content ${activeMenu === "member-procurement" ? "full-width" : ""}`}>
               <div className="consumer-main">
                 <MemberPage
                   activeMenu={activeMenu}
                   orders={orders}
-                  workQueue={workQueue}
+                  growth={memberGrowth}
+                  ledger={memberLedger}
+                  packages={memberPackages}
+                  shipments={memberShipments}
+                  trackingEvents={memberTrackingEvents}
+                  tickets={memberTickets}
                   session={session}
                   submitting={submitting}
                   onLogin={login}
@@ -304,7 +378,7 @@ function App() {
         </div>
         <nav>
           <span className="nav-section">後台功能</span>
-          {adminMenus.map((menu) => (
+          {visibleAdminMenus.map((menu) => (
             <button className={activeMenu === menu.id ? "active" : ""} key={menu.id} onClick={() => setActiveMenu(menu.id)} type="button">
               {menu.icon ? <menu.icon size={18} /> : null}{menu.label}
             </button>
@@ -376,8 +450,27 @@ function MemberSidebar({ activeMenu, onSelect }: { activeMenu: string; onSelect:
   return <aside className="member-sidebar">{memberGroups.map((group) => <section className="menu-group" key={group.title}><button className="group-title" type="button"><group.icon size={22} /><span>{group.title}</span><ChevronDown size={15} /></button><div className="group-items">{group.items.map((item) => <button className={activeMenu === item.id ? "active" : ""} key={item.id} onClick={() => onSelect(item.id)} type="button">{item.label}</button>)}</div></section>)}</aside>;
 }
 
-function MemberProfileCard() {
-  return <section className="member-profile-card"><div className="profile-main"><span className="profile-kicker">會員中心</span><h2>18126257826</h2><div className="profile-tags"><span className="green">ID：V057448</span><span className="orange">標識：DPHK</span><span className="level">晶輝會員</span></div></div><div className="balance-box"><div><span>帳戶餘額</span><strong>HKD 0</strong></div><button type="button">去充值</button></div><div className="points-box"><span>積分</span><strong>0</strong></div></section>;
+function MemberProfileCard({ profile, growth }: { profile: MemberProfile; growth: MemberGrowth }) {
+  const totalPoints = profile.points.procurement + profile.points.logistics;
+  return (
+    <section className="member-profile-card">
+      <div className="profile-main">
+        <span className="profile-kicker">會員中心</span>
+        <h2>{profile.displayName}</h2>
+        <div className="profile-tags">
+          <span className="green">ID：{profile.id}</span>
+          <span className="orange">等級：{profile.level}</span>
+          {(profile.tags.length ? profile.tags : ["標準會員"]).slice(0, 2).map((tag) => <span className="level" key={tag}>{tag}</span>)}
+        </div>
+      </div>
+      <div className="balance-box">
+        <div><span>帳戶餘額</span><strong>HKD {profile.balanceHkd}</strong></div>
+        <div><span>佣金餘額</span><strong>HKD {profile.commissionBalanceHkd}</strong></div>
+        <button type="button">去充值</button>
+      </div>
+      <div className="points-box"><span>積分</span><strong>{totalPoints}</strong><small>訂單 {growth.totals.orderCount}</small></div>
+    </section>
+  );
 }
 
 function RightRail() {
@@ -391,7 +484,12 @@ function InfoCard({ title, items }: { title: string; items: string[] }) {
 function MemberPage({
   activeMenu,
   orders,
-  workQueue,
+  growth,
+  ledger,
+  packages,
+  shipments,
+  trackingEvents,
+  tickets,
   session,
   submitting,
   onLogin,
@@ -400,7 +498,12 @@ function MemberPage({
 }: {
   activeMenu: string;
   orders: MemberOrder[];
-  workQueue: WorkQueue;
+  growth: MemberGrowth;
+  ledger: MemberLedgerEntry[];
+  packages: MemberPackage[];
+  shipments: MemberShipment[];
+  trackingEvents: MemberTrackingEvent[];
+  tickets: MemberTicket[];
   session: SessionPayload["session"];
   submitting: boolean;
   onLogin: (event: FormEvent<HTMLFormElement>, actorType: "member" | "staff") => void;
@@ -410,18 +513,18 @@ function MemberPage({
   if (activeMenu === "member-procurement") return <ProcurementRequestPage submitting={submitting} onSubmit={onSubmit} />;
 
   const title = memberMenuItems.find((item) => item.id === activeMenu)?.label ?? "我的消息";
-  if (activeMenu === "member-home") return <MemberDashboardCard action="全部已讀" title="消息列表"><div className="empty-state">無數據</div></MemberDashboardCard>;
+  if (activeMenu === "member-home") return <MemberDashboardCard action="全部已讀" title="會員工作台"><SummaryStrip items={[["累計消費", `HKD ${growth.totals.cumulativeSpendingHkd}`], ["累計運費", `HKD ${growth.totals.cumulativeFreightHkd}`], ["充值金額", `HKD ${growth.totals.topupAmountHkd}`], ["訂單數量", String(growth.totals.orderCount)]]} /><h3>最近訂單</h3><OrderList orders={orders.slice(0, 5)} /><h3>最近包裹</h3><PackageList packages={packages.slice(0, 5)} /><h3>客服工單</h3><TicketList tickets={tickets.slice(0, 5)} /></MemberDashboardCard>;
   if (activeMenu === "member-auth") {
     return <MemberDashboardCard title="註冊登入"><FormGrid><form onSubmit={onSubmit("/api/auth/register", "註冊中...", (result) => `會員已建立：${result.id}`)}><h3>電郵註冊</h3><input name="email" type="email" placeholder="email" required /><input name="displayName" placeholder="顯示名稱" /><input name="password" type="password" placeholder="密碼至少 8 位" required /><select name="locale" defaultValue="zh-Hant"><option value="zh-Hant">繁體中文</option><option value="en">English</option><option value="ja">日本語</option></select><button disabled={submitting}>註冊</button></form><form onSubmit={(event) => onLogin(event, "member")}><h3>會員登入</h3><input name="email" type="email" defaultValue="demo@droppilot.net" required /><input name="password" type="password" defaultValue="Member123!" required /><button disabled={submitting}>登入</button></form><form onSubmit={onSubmit("/api/auth/logout", "登出中...", () => "已登出")}><h3>目前身份</h3><p className="body-text">{session ? `${session.actorType} / ${session.actorId}` : "未登入"}</p><button disabled={submitting}>登出</button></form></FormGrid></MemberDashboardCard>;
   }
   if (activeMenu === "member-procurement") return <MemberDashboardCard title="提交隨意購"><FormGrid><form onSubmit={onSubmit("/api/procurement/orders", "提交代購...", (result) => `代購單已建立：${result.id}`)}><h3>提交代購需求</h3><input name="platform" placeholder="平台，如 Mercari" required /><input name="productUrl" placeholder="商品 URL" required /><input name="title" placeholder="商品名稱" required /><input name="quantity" type="number" min="1" defaultValue="1" required /><textarea name="remarks" placeholder="備註" /><button disabled={submitting}>提交代購</button></form><form onSubmit={onSubmitWithId((form) => `/api/procurement/orders/${encodeURIComponent(String(form.get("orderId") ?? ""))}/pay`, "扣款中...", (result) => `已付款：${result.id}`)}><h3>支付已報價訂單</h3><input name="orderId" defaultValue="DP-PO-10001" required /><button disabled={submitting}>餘額付款</button></form></FormGrid></MemberDashboardCard>;
   if (activeMenu === "member-auction") return <MemberDashboardCard title="Yahoo 代拍"><FormGrid><form onSubmit={onSubmit("/api/auction/orders", "提交代拍...", (result) => `代拍單已建立：${result.id}`)}><h3>提交代拍授權</h3><input name="lotUrl" placeholder="Yahoo 拍賣 URL" required /><input name="title" placeholder="拍品名稱" required /><input name="maxBidJpy" type="number" min="1" placeholder="最高出價 JPY" required /><input name="authorizationLimitJpy" type="number" min="1" placeholder="授權扣款上限 JPY" required /><button disabled={submitting}>提交代拍</button></form></FormGrid></MemberDashboardCard>;
   if (activeMenu === "member-cart") return <MemberDashboardCard title="購物車"><FormGrid><form onSubmit={onSubmit("/api/cart/items", "加入購物車...", (result) => `已加入購物車：${result.id}`)}><h3>加入商品</h3><input name="platform" placeholder="平台" required /><input name="productUrl" placeholder="商品 URL" required /><input name="title" placeholder="商品名稱" required /><input name="quantity" type="number" min="1" defaultValue="1" /><textarea name="remarks" placeholder="備註；日本本地運費採購後補收" /><button disabled={submitting}>加入購物車</button></form><form onSubmit={onSubmit("/api/cart/checkout", "建立代購單...", (result) => `已建立 ${result.count} 張代購單`)}><h3>轉為代購單</h3><p className="body-text">跨平台商品會分別生成代購單。</p><button disabled={submitting}>購物車結帳</button></form></FormGrid></MemberDashboardCard>;
-  if (["member-wallet", "member-topup", "member-remittance", "member-ledger"].includes(activeMenu)) return <MemberDashboardCard title={title}><FormGrid><form onSubmit={onSubmit("/api/payments/bank-transfer-requests", "提交充值...", (result) => `充值申請已提交：${result.id}`)}><h3>銀行轉帳充值</h3><input name="amountHkd" type="number" min="1" placeholder="金額 HKD" required /><input name="proofUrl" placeholder="付款憑證 URL" /><button disabled={submitting}>提交充值</button></form><form onSubmit={onSubmit("/api/member/notification-preferences", "更新通知...", (result) => `通知已更新：${result.channel}`)}><h3>通知偏好</h3><select name="channel"><option value="email">Email</option><option value="whatsapp">WhatsApp</option></select><select name="enabled"><option value="true">啟用</option><option value="">停用</option></select><button disabled={submitting}>儲存通知</button></form></FormGrid><QueueList items={workQueue.ledger} empty="暫無交易流水" render={(entry) => `${entry.bucket} / ${entry.direction} / HKD ${entry.amountHkd}`} /></MemberDashboardCard>;
-  if (["member-packages", "member-inbound-list"].includes(activeMenu)) return <MemberDashboardCard title={title}><FormGrid><form onSubmit={onSubmit("/api/value-added-services", "提交增值服務...", (result) => `增值服務已建立：${result.id}`)}><h3>增值服務</h3><input name="packageId" defaultValue="DP-PK-10003" required /><select name="serviceType">{serviceBlueprint.valueAddedServices.map((service) => <option key={service.code} value={service.code}>{service.label}</option>)}</select><button disabled={submitting}>提交服務</button></form><form onSubmit={onSubmitWithId((form) => `/api/packages/${encodeURIComponent(String(form.get("packageId") ?? ""))}/claim`, "認領中...", (result) => `包裹已認領：${result.id}`)}><h3>無主包裹認領</h3><input name="packageId" defaultValue="DP-PK-OWNERLESS" required /><button disabled={submitting}>提交認領</button></form></FormGrid><OrderList orders={orders} /></MemberDashboardCard>;
-  if (["member-shipments", "member-shipment-packages"].includes(activeMenu)) return <MemberDashboardCard title={title}><FormGrid><form onSubmit={onSubmitWithId((form) => `/api/shipments/${encodeURIComponent(String(form.get("shipmentId") ?? ""))}/pay-freight`, "支付運費...", (result) => `運費已支付：${result.id}`)}><h3>支付國際運費</h3><input name="shipmentId" defaultValue="DP-SH-10001" required /><button disabled={submitting}>餘額支付</button></form></FormGrid><QueueList items={workQueue.shipments} empty="暫無運單" render={(shipment) => `${shipment.id} / ${shipment.lineCode} / ${shipment.status}`} /><QueueList items={workQueue.trackingEvents} empty="暫無物流節點" render={(event) => `${event.shipmentId} / ${event.status} / ${event.location ?? "-"}`} /></MemberDashboardCard>;
-  if (activeMenu === "member-support") return <MemberDashboardCard title="工單服務"><FormGrid><form onSubmit={onSubmit("/api/support/tickets", "提交工單...", (result) => `工單已提交：${result.id}`)}><h3>客服工單</h3><select name="ticketType">{supportTicketTypes.map((type) => <option key={type} value={type}>{type}</option>)}</select><input name="subject" placeholder="主題" required /><textarea name="description" placeholder="問題描述" required /><button disabled={submitting}>提交工單</button></form><form onSubmit={onSubmit("/api/aftersales/requests", "提交售後...", (result) => `售後申請已提交：${result.id}`)}><h3>取消 / 退款申請</h3><select name="orderType"><option value="procurement">代購</option><option value="shipment">物流</option></select><input name="orderId" defaultValue="DP-PO-10001" required /><select name="requestType"><option value="cancel">取消</option><option value="refund">退款</option></select><textarea name="reason" placeholder="原因" required /><button disabled={submitting}>提交售後</button></form></FormGrid><QueueList items={workQueue.tickets} empty="暫無工單" render={(ticket) => `${ticket.subject} / ${ticket.status}`} /></MemberDashboardCard>;
-  if (["member-growth", "member-commission", "member-coupons"].includes(activeMenu)) return <MemberDashboardCard title={title}><FormGrid><form onSubmit={onSubmit("/api/points/redemptions", "兌換積分...", (result) => `兌換申請已提交：${result.id}`)}><h3>積分兌換</h3><select name="bucket"><option value="procurement">代購商品積分</option><option value="logistics">物流費用積分</option></select><input name="points" type="number" min="1" placeholder="積分" required /><input name="rewardName" placeholder="兌換商品" required /><button disabled={submitting}>提交兌換</button></form><form onSubmit={onSubmit("/api/coupons/redeem", "使用優惠券...", (result) => `優惠券已使用：HKD ${result.discountHkd}`)}><h3>優惠券</h3><input name="code" defaultValue="WELCOME30" required /><input name="sourceType" defaultValue="procurement_order" required /><input name="sourceId" defaultValue="DP-PO-10001" required /><button disabled={submitting}>使用優惠券</button></form></FormGrid></MemberDashboardCard>;
+  if (["member-wallet", "member-topup", "member-remittance", "member-ledger"].includes(activeMenu)) return <MemberDashboardCard title={title}><FormGrid><form onSubmit={onSubmit("/api/payments/bank-transfer-requests", "提交充值...", (result) => `充值申請已提交：${result.id}`)}><h3>銀行轉帳充值</h3><input name="amountHkd" type="number" min="1" placeholder="金額 HKD" required /><input name="proofUrl" placeholder="付款憑證 URL" /><button disabled={submitting}>提交充值</button></form><form onSubmit={onSubmit("/api/member/notification-preferences", "更新通知...", (result) => `通知已更新：${result.channel}`)}><h3>通知偏好</h3><select name="channel"><option value="email">Email</option><option value="whatsapp">WhatsApp</option></select><select name="enabled"><option value="true">啟用</option><option value="">停用</option></select><button disabled={submitting}>儲存通知</button></form></FormGrid><LedgerList ledger={ledger} /></MemberDashboardCard>;
+  if (["member-packages", "member-inbound-list"].includes(activeMenu)) return <MemberDashboardCard title={title}><FormGrid><form onSubmit={onSubmit("/api/value-added-services", "提交增值服務...", (result) => `增值服務已建立：${result.id}`)}><h3>增值服務</h3><input name="packageId" defaultValue={packages[0]?.id ?? ""} placeholder="包裹 ID" required /><select name="serviceType">{serviceBlueprint.valueAddedServices.map((service) => <option key={service.code} value={service.code}>{service.label}</option>)}</select><button disabled={submitting}>提交服務</button></form><form onSubmit={onSubmitWithId((form) => `/api/packages/${encodeURIComponent(String(form.get("packageId") ?? ""))}/claim`, "認領中...", (result) => `包裹已認領：${result.id}`)}><h3>無主包裹認領</h3><input name="packageId" placeholder="無主包裹 ID" required /><button disabled={submitting}>提交認領</button></form></FormGrid><PackageList packages={packages} /></MemberDashboardCard>;
+  if (["member-shipments", "member-shipment-packages"].includes(activeMenu)) return <MemberDashboardCard title={title}><FormGrid><form onSubmit={onSubmitWithId((form) => `/api/shipments/${encodeURIComponent(String(form.get("shipmentId") ?? ""))}/pay-freight`, "支付運費...", (result) => `運費已支付：${result.id}`)}><h3>支付國際運費</h3><input name="shipmentId" defaultValue={shipments[0]?.id ?? ""} placeholder="運單 ID" required /><button disabled={submitting}>餘額支付</button></form></FormGrid><ShipmentList shipments={shipments} /><TrackingList events={trackingEvents} /></MemberDashboardCard>;
+  if (activeMenu === "member-support") return <MemberDashboardCard title="工單服務"><FormGrid><form onSubmit={onSubmit("/api/support/tickets", "提交工單...", (result) => `工單已提交：${result.id}`)}><h3>客服工單</h3><select name="ticketType">{supportTicketTypes.map((type) => <option key={type} value={type}>{type}</option>)}</select><input name="subject" placeholder="主題" required /><textarea name="description" placeholder="問題描述" required /><button disabled={submitting}>提交工單</button></form><form onSubmit={onSubmit("/api/aftersales/requests", "提交售後...", (result) => `售後申請已提交：${result.id}`)}><h3>取消 / 退款申請</h3><select name="orderType"><option value="procurement">代購</option><option value="shipment">物流</option></select><input name="orderId" defaultValue={orders[0]?.id ?? ""} placeholder="訂單 ID" required /><select name="requestType"><option value="cancel">取消</option><option value="refund">退款</option></select><textarea name="reason" placeholder="原因" required /><button disabled={submitting}>提交售後</button></form></FormGrid><TicketList tickets={tickets} /></MemberDashboardCard>;
+  if (["member-growth", "member-commission", "member-coupons"].includes(activeMenu)) return <MemberDashboardCard title={title}><SummaryStrip items={[["代購積分", String(growth.points.procurement)], ["物流積分", String(growth.points.logistics)], ["佣金餘額", `HKD ${growth.commissionHkd}`], ["會員等級", `${growth.levels.length} 級`]]} /><FormGrid><form onSubmit={onSubmit("/api/points/redemptions", "兌換積分...", (result) => `兌換申請已提交：${result.id}`)}><h3>積分兌換</h3><select name="bucket"><option value="procurement">代購商品積分</option><option value="logistics">物流費用積分</option></select><input name="points" type="number" min="1" placeholder="積分" required /><input name="rewardName" placeholder="兌換商品" required /><button disabled={submitting}>提交兌換</button></form><form onSubmit={onSubmit("/api/coupons/redeem", "使用優惠券...", (result) => `優惠券已使用：HKD ${result.discountHkd}`)}><h3>優惠券</h3><input name="code" defaultValue="WELCOME30" required /><input name="sourceType" defaultValue="procurement_order" required /><input name="sourceId" defaultValue={orders[0]?.id ?? ""} placeholder="訂單 ID" required /><button disabled={submitting}>使用優惠券</button></form></FormGrid></MemberDashboardCard>;
   return <MemberDashboardCard title={title}><div className="empty-state">此功能頁已建立菜單入口，後續接入詳細資料表。</div></MemberDashboardCard>;
 }
 
@@ -445,13 +548,13 @@ function AdminPage({
   onSubmitWithId: (pathBuilder: (form: FormData) => string, busy: string, message: (result: { id?: string; status?: string; [key: string]: unknown }) => string) => (event: FormEvent<HTMLFormElement>) => void;
 }) {
   if (activeMenu === "admin-auth") return <AdminFormPanel title="後台登入" icon={ShieldCheck}><form onSubmit={(event) => onLogin(event, "staff")}><h3>員工登入</h3><input name="email" type="email" defaultValue="admin@droppilot.net" required /><input name="password" type="password" defaultValue="Admin123!" required /><button disabled={submitting}>登入</button></form></AdminFormPanel>;
-  if (activeMenu === "admin-quotes") return <AdminFormPanel title="代購報價" icon={ShoppingCart}><form onSubmit={onSubmitWithId((form) => `/api/admin/procurement/orders/${encodeURIComponent(String(form.get("orderId") ?? ""))}/quote`, "報價中...", (result) => `已報價：${result.id}`)}><h3>報價訂單</h3><input name="orderId" defaultValue="DP-PO-10001" required /><input name="itemAmountJpy" type="number" min="1" placeholder="商品金額 JPY" required /><input name="localShippingJpy" type="number" min="0" placeholder="日本本地運費 JPY" /><input name="serviceFeeHkd" type="number" min="0" placeholder="服務費 HKD" /><textarea name="remarks" placeholder="報價備註" /><button disabled={submitting}>提交報價</button></form></AdminFormPanel>;
+if (activeMenu === "admin-quotes") return <AdminFormPanel title="代購報價" icon={ShoppingCart}><form onSubmit={onSubmitWithId((form) => `/api/admin/procurement/orders/${encodeURIComponent(String(form.get("orderId") ?? ""))}/quote`, "報價中...", (result) => `已報價：${result.id}`)}><h3>報價訂單</h3><input name="orderId" defaultValue={workQueue.procurementOrders.find((order) => order.status === "pending_quote")?.id ?? ""} placeholder="代購單 ID" required /><input name="itemAmountJpy" type="number" min="1" placeholder="商品金額 JPY" required /><input name="localShippingJpy" type="number" min="0" placeholder="日本本地運費 JPY" /><input name="serviceFeeHkd" type="number" min="0" placeholder="服務費 HKD" /><textarea name="remarks" placeholder="報價備註" /><button disabled={submitting}>提交報價</button></form><AdminQueue title="待報價 / 待付款代購單" items={workQueue.procurementOrders} render={(order) => `${order.id} / ${order.title} / ${order.status}`} /></AdminFormPanel>;
   if (activeMenu === "admin-auction") return <AdminFormPanel title="代拍處理" icon={Gavel}><form onSubmit={onSubmitWithId((form) => `/api/admin/auction/orders/${encodeURIComponent(String(form.get("orderId") ?? ""))}/resolve`, "處理代拍...", (result) => `代拍已處理：${result.id}`)}><h3>得標 / 流標</h3><input name="orderId" defaultValue="DP-AU-10002" required /><select name="result"><option value="won">得標</option><option value="lost">流標退款</option></select><input name="winningBidJpy" type="number" min="0" placeholder="落札價 JPY" /><button disabled={submitting}>確認結果</button></form></AdminFormPanel>;
-  if (activeMenu === "admin-purchasing") return <AdminFormPanel title="採購入庫預報" icon={PackageCheck}><form onSubmit={onSubmitWithId((form) => `/api/admin/procurement/orders/${encodeURIComponent(String(form.get("orderId") ?? ""))}/mark-purchased`, "生成預報...", (result) => `已生成入庫預報：${result.packageId}`)}><h3>標記已採購</h3><input name="orderId" defaultValue="DP-PO-10001" required /><input name="japanTrackingNo" placeholder="日本物流單號" /><input name="warehouseId" defaultValue="warehouse-funabashi" /><textarea name="remarks" placeholder="採購備註" /><button disabled={submitting}>生成入庫預報</button></form></AdminFormPanel>;
-  if (activeMenu === "admin-inbound") return <AdminFormPanel title="入庫與無主件" icon={Boxes}><form onSubmit={onSubmit("/api/admin/warehouse/inbound-packages", "入庫中...", (result) => `包裹已入庫：${result.id}`)}><h3>入庫掃碼</h3><input name="memberId" defaultValue="demo-member" placeholder="會員 ID；無主件留空" /><input name="warehouseId" defaultValue="warehouse-funabashi" /><input name="trackingNo" placeholder="日本物流單號" required /><input name="weightGram" type="number" min="0" placeholder="重量 g" /><input name="volumeCm3" type="number" min="0" placeholder="體積 cm3" /><button disabled={submitting}>登記入庫</button></form><form onSubmit={onSubmit("/api/admin/warehouse/destroy-expired-ownerless", "清理中...", (result) => `已銷毀 ${result.destroyed} 件`)}><h3>60 天無主件處理</h3><p className="body-text">超過保留期的公海包裹會標記為 destroyed。</p><button disabled={submitting}>執行清理</button></form></AdminFormPanel>;
-  if (activeMenu === "admin-consolidation") return <AdminFormPanel title="合箱與運費" icon={Truck}><form onSubmit={onSubmit("/api/admin/shipments", "建立發貨單...", (result) => `發貨單已建立：${result.id}`)}><h3>建立合箱出庫</h3><input name="packageIds" placeholder="包裹 ID，以逗號分隔" required /><input name="lineCode" defaultValue="HK-AIR-STANDARD" required /><input name="cartonFeeHkd" type="number" min="0" defaultValue="15" /><input name="freightFeeHkd" type="number" min="0" placeholder="可先留空" /><button disabled={submitting}>建立發貨單</button></form><form onSubmit={onSubmitWithId((form) => `/api/admin/shipments/${encodeURIComponent(String(form.get("shipmentId") ?? ""))}/freight-quotes`, "計算運費...", (result) => `計費重量 ${result.billingWeightGram}g，運費 HKD ${result.freightFeeHkd}`)}><h3>實重 / 體積重取高</h3><input name="shipmentId" defaultValue="DP-SH-10001" required /><input name="actualWeightGram" type="number" min="1" placeholder="實重 g" required /><input name="lengthCm" type="number" min="1" placeholder="長 cm" required /><input name="widthCm" type="number" min="1" placeholder="寬 cm" required /><input name="heightCm" type="number" min="1" placeholder="高 cm" required /><input name="ratePerKgHkd" type="number" min="1" placeholder="每 kg HKD" required /><button disabled={submitting}>計算運費</button></form></AdminFormPanel>;
-  if (activeMenu === "admin-tracking") return <AdminFormPanel title="物流節點" icon={Globe2}><form onSubmit={onSubmitWithId((form) => `/api/admin/shipments/${encodeURIComponent(String(form.get("shipmentId") ?? ""))}/tracking-events`, "新增節點...", (result) => `物流節點已新增：${result.id}`)}><h3>新增物流追蹤</h3><input name="shipmentId" defaultValue="DP-SH-10001" required /><select name="status"><option value="packed">已打包</option><option value="outbound">已出庫</option><option value="departed_by_air_or_sea">已上飛機/船</option><option value="arrived_port">到港</option><option value="customs_clearance">清關</option><option value="delivery">派送</option><option value="signed">簽收</option></select><input name="location" defaultValue="Funabashi" /><input name="trackingNo" placeholder="國際物流號" /><textarea name="description" defaultValue="Package moved to next logistics step." /><button disabled={submitting}>新增節點</button></form></AdminFormPanel>;
-  if (activeMenu === "admin-finance") return <AdminFormPanel title="財務與退款" icon={CircleDollarSign}><form onSubmit={onSubmitWithId((form) => `/api/admin/payments/${encodeURIComponent(String(form.get("paymentId") ?? ""))}/approve`, "入帳中...", (result) => `充值已入帳：${result.id}`)}><h3>銀行轉帳入帳</h3><input name="paymentId" defaultValue="pay-demo-bank-1" required /><button disabled={submitting}>審核入帳</button></form><form onSubmit={onSubmitWithId((form) => `/api/admin/aftersales/${encodeURIComponent(String(form.get("requestId") ?? ""))}/review`, "審核售後...", (result) => `售後已處理：${result.id}`)}><h3>售後 / 退款審核</h3><input name="requestId" defaultValue="after-demo-refund" required /><select name="decision"><option value="approved">批准</option><option value="rejected">拒絕</option></select><input name="refundHkd" type="number" min="0" placeholder="退款 HKD" /><button disabled={submitting}>提交審核</button></form></AdminFormPanel>;
+if (activeMenu === "admin-purchasing") return <AdminFormPanel title="採購入庫預報" icon={PackageCheck}><form onSubmit={onSubmitWithId((form) => `/api/admin/procurement/orders/${encodeURIComponent(String(form.get("orderId") ?? ""))}/mark-purchased`, "生成預報...", (result) => `已生成入庫預報：${result.packageId}`)}><h3>標記已採購</h3><input name="orderId" defaultValue={workQueue.procurementOrders.find((order) => order.status === "paid" || order.status === "pending_purchase")?.id ?? ""} placeholder="已付款代購單 ID" required /><input name="japanTrackingNo" placeholder="日本物流單號" /><input name="warehouseId" defaultValue="warehouse-funabashi" /><textarea name="remarks" placeholder="採購備註" /><button disabled={submitting}>生成入庫預報</button></form><AdminQueue title="待採購 / 採購中" items={workQueue.procurementOrders} render={(order) => `${order.id} / ${order.platform} / ${order.status}`} /></AdminFormPanel>;
+if (activeMenu === "admin-inbound") return <AdminFormPanel title="入庫與無主件" icon={Boxes}><form onSubmit={onSubmit("/api/admin/warehouse/inbound-packages", "入庫中...", (result) => `包裹已入庫：${result.id}`)}><h3>入庫掃碼</h3><input name="memberId" placeholder="會員 ID；無主件留空" /><input name="warehouseId" defaultValue="warehouse-funabashi" /><input name="trackingNo" placeholder="日本物流單號" required /><input name="weightGram" type="number" min="0" placeholder="重量 g" /><input name="volumeCm3" type="number" min="0" placeholder="體積 cm3" /><button disabled={submitting}>登記入庫</button></form><form onSubmit={onSubmit("/api/admin/warehouse/destroy-expired-ownerless", "清理中...", (result) => `已銷毀 ${result.destroyed} 件`)}><h3>60 天無主件處理</h3><p className="body-text">超過保留期的公海包裹會標記為 destroyed。</p><button disabled={submitting}>執行清理</button></form><AdminQueue title="最近入庫 / 公海包裹" items={workQueue.inboundPackages} render={(item) => `${item.id} / ${item.ownerStatus} / ${item.status}`} /><AdminQueue title="增值服務待處理" items={workQueue.valueAddedServices} render={(service) => `${service.packageId} / ${service.serviceType} / ${service.status}`} /></AdminFormPanel>;
+if (activeMenu === "admin-consolidation") return <AdminFormPanel title="合箱與運費" icon={Truck}><form onSubmit={onSubmit("/api/admin/shipments", "建立發貨單...", (result) => `發貨單已建立：${result.id}`)}><h3>建立合箱出庫</h3><input name="packageIds" placeholder="包裹 ID，以逗號分隔" required /><input name="lineCode" defaultValue="HK-AIR-STANDARD" required /><input name="cartonFeeHkd" type="number" min="0" defaultValue="15" /><input name="freightFeeHkd" type="number" min="0" placeholder="可先留空" /><button disabled={submitting}>建立發貨單</button></form><form onSubmit={onSubmitWithId((form) => `/api/admin/shipments/${encodeURIComponent(String(form.get("shipmentId") ?? ""))}/freight-quotes`, "計算運費...", (result) => `計費重量 ${result.billingWeightGram}g，運費 HKD ${result.freightFeeHkd}`)}><h3>實重 / 體積重取高</h3><input name="shipmentId" defaultValue={workQueue.shipments[0]?.id ?? ""} placeholder="運單 ID" required /><input name="actualWeightGram" type="number" min="1" placeholder="實重 g" required /><input name="lengthCm" type="number" min="1" placeholder="長 cm" required /><input name="widthCm" type="number" min="1" placeholder="寬 cm" required /><input name="heightCm" type="number" min="1" placeholder="高 cm" required /><input name="ratePerKgHkd" type="number" min="1" placeholder="每 kg HKD" required /><button disabled={submitting}>計算運費</button></form><AdminQueue title="待合箱包裹" items={workQueue.inboundPackages.filter((item) => item.ownerStatus === "identified")} render={(item) => `${item.id} / ${item.memberId ?? "-"} / ${item.warehouse}`} /><AdminQueue title="運單" items={workQueue.shipments} render={(shipment) => `${shipment.id} / ${shipment.lineCode} / ${shipment.status}`} /></AdminFormPanel>;
+if (activeMenu === "admin-tracking") return <AdminFormPanel title="物流節點" icon={Globe2}><form onSubmit={onSubmitWithId((form) => `/api/admin/shipments/${encodeURIComponent(String(form.get("shipmentId") ?? ""))}/tracking-events`, "新增節點...", (result) => `物流節點已新增：${result.id}`)}><h3>新增物流追蹤</h3><input name="shipmentId" defaultValue={workQueue.shipments[0]?.id ?? ""} placeholder="運單 ID" required /><select name="status"><option value="packed">已打包</option><option value="outbound">已出庫</option><option value="departed_by_air_or_sea">已上飛機/船</option><option value="arrived_port">到港</option><option value="customs_clearance">清關</option><option value="delivery">派送</option><option value="signed">簽收</option></select><input name="location" defaultValue="Funabashi" /><input name="trackingNo" placeholder="國際物流號" /><textarea name="description" defaultValue="Package moved to next logistics step." /><button disabled={submitting}>新增節點</button></form><AdminQueue title="物流節點" items={workQueue.trackingEvents} render={(event) => `${event.shipmentId} / ${event.status} / ${event.location ?? "-"}`} /></AdminFormPanel>;
+if (activeMenu === "admin-finance") return <AdminFormPanel title="財務與退款" icon={CircleDollarSign}><form onSubmit={onSubmitWithId((form) => `/api/admin/payments/${encodeURIComponent(String(form.get("paymentId") ?? ""))}/approve`, "入帳中...", (result) => `充值已入帳：${result.id}`)}><h3>銀行轉帳入帳</h3><input name="paymentId" defaultValue={workQueue.paymentRequests.find((payment) => payment.status === "pending_review")?.id ?? ""} placeholder="充值申請 ID" required /><button disabled={submitting}>審核入帳</button></form><form onSubmit={onSubmitWithId((form) => `/api/admin/aftersales/${encodeURIComponent(String(form.get("requestId") ?? ""))}/review`, "審核售後...", (result) => `售後已處理：${result.id}`)}><h3>售後 / 退款審核</h3><input name="requestId" defaultValue={workQueue.aftersales.find((request) => request.status === "pending_review")?.id ?? ""} placeholder="售後申請 ID" required /><select name="decision"><option value="approved">批准</option><option value="rejected">拒絕</option></select><input name="refundHkd" type="number" min="0" placeholder="退款 HKD" /><button disabled={submitting}>提交審核</button></form><AdminQueue title="充值審核" items={workQueue.paymentRequests} render={(payment) => `${payment.id} / ${payment.memberId} / HKD ${payment.amountHkd} / ${payment.status}`} /><AdminQueue title="售後退款" items={workQueue.aftersales} render={(request) => `${request.id} / ${request.orderId} / ${request.status}`} /><AdminQueue title="財務流水" items={workQueue.ledger} render={(entry) => `${entry.bucket} / ${entry.direction} / HKD ${entry.amountHkd}`} /></AdminFormPanel>;
   if (activeMenu === "admin-roles") return <RolePanel />;
   if (activeMenu === "admin-content") return <ContentPanel submitting={submitting} onSubmit={onSubmit} />;
   if (activeMenu === "admin-export") return <ExportPanel submitting={submitting} onSubmit={onSubmit} />;
@@ -550,6 +653,15 @@ function ProcurementSummary({ label }: { label: string }) {
   return <div className="procurement-summary-row"><span>{label}</span><strong>-</strong></div>;
 }
 
+function AdminQueue<T>({ title, items, render }: { title: string; items: T[]; render: (item: T) => string }) {
+  return (
+    <section className="admin-queue">
+      <h3>{title}</h3>
+      <QueueList items={items} empty="暫無待辦" render={render} />
+    </section>
+  );
+}
+
 function AdminFormPanel({ title, icon, children }: { title: string; icon: typeof Home; children: React.ReactNode }) {
   return <section className="page-grid"><Panel eyebrow="Admin" title={title} icon={icon} className="full-span"><FormGrid>{children}</FormGrid></Panel></section>;
 }
@@ -562,8 +674,32 @@ function FormGrid({ children }: { children: React.ReactNode }) {
   return <div className="form-grid">{children}</div>;
 }
 
+function SummaryStrip({ items }: { items: Array<[string, string]> }) {
+  return <div className="summary-strip">{items.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}</div>;
+}
+
 function OrderList({ orders }: { orders: MemberOrder[] }) {
-  return <div className="order-list">{(orders.length ? orders : demoOrders).map((order) => <article className="order-row" key={order.id}><div><strong>{order.id}</strong><span>{order.type} / {order.platform ?? order.warehouse}</span></div><mark>{order.status}</mark></article>)}</div>;
+  return <div className="order-list">{orders.length === 0 ? <article className="order-row"><span>暫無訂單</span></article> : orders.map((order) => <article className="order-row" key={order.id}><div><strong>{order.id}</strong><span>{order.type} / {order.platform ?? order.warehouse}</span></div><mark>{order.status}</mark></article>)}</div>;
+}
+
+function LedgerList({ ledger }: { ledger: MemberLedgerEntry[] }) {
+  return <div className="order-list">{ledger.length === 0 ? <article className="order-row"><span>暫無交易流水</span></article> : ledger.map((entry) => <article className="order-row" key={entry.id}><div><strong>{entry.bucket} / {entry.direction}</strong><span>{entry.source}{entry.note ? ` / ${entry.note}` : ""}</span></div><mark>HKD {entry.amountHkd}</mark></article>)}</div>;
+}
+
+function PackageList({ packages }: { packages: MemberPackage[] }) {
+  return <div className="order-list">{packages.length === 0 ? <article className="order-row"><span>暫無包裹</span></article> : packages.map((item) => <article className="order-row" key={item.id}><div><strong>{item.id}</strong><span>{item.warehouse} / {item.trackingNo ?? "未填物流號"} / {item.weightGram ?? "-"}g</span>{item.valueAddedServices.length ? <small>{item.valueAddedServices.map((service) => `${service.serviceType}:${service.status}`).join("、")}</small> : null}</div><mark>{item.status}</mark></article>)}</div>;
+}
+
+function ShipmentList({ shipments }: { shipments: MemberShipment[] }) {
+  return <div className="order-list">{shipments.length === 0 ? <article className="order-row"><span>暫無運單</span></article> : shipments.map((shipment) => <article className="order-row" key={shipment.id}><div><strong>{shipment.id}</strong><span>{shipment.lineCode} / {shipment.packageCount} 件 / {shipment.trackingNo ?? "未出追蹤號"}</span></div><mark>{shipment.status}</mark></article>)}</div>;
+}
+
+function TrackingList({ events }: { events: MemberTrackingEvent[] }) {
+  return <div className="order-list">{events.length === 0 ? <article className="order-row"><span>暫無物流節點</span></article> : events.map((event) => <article className="order-row" key={event.id}><div><strong>{event.shipmentId}</strong><span>{event.location ?? "-"} / {event.description}</span></div><mark>{event.status}</mark></article>)}</div>;
+}
+
+function TicketList({ tickets }: { tickets: MemberTicket[] }) {
+  return <div className="order-list">{tickets.length === 0 ? <article className="order-row"><span>暫無工單</span></article> : tickets.map((ticket) => <article className="order-row" key={ticket.id}><div><strong>{ticket.subject}</strong><span>{ticket.type} / {ticket.priority}{ticket.related ? ` / ${ticket.related}` : ""}</span></div><mark>{ticket.status}</mark></article>)}</div>;
 }
 
 function QueueList<T>({ items, empty, render }: { items: T[]; empty: string; render: (item: T) => string }) {

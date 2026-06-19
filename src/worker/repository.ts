@@ -179,6 +179,8 @@ type FinancialLedgerRow = {
   amount_jpy: number;
   source_type: string;
   source_id: string;
+  balance_after_hkd?: number | null;
+  note?: string | null;
   created_at: string;
 };
 
@@ -219,6 +221,65 @@ type PaymentRequestRow = {
   member_id: string;
   amount_hkd: number;
   status: string;
+  proof_url?: string | null;
+  created_at?: string;
+};
+
+type MemberPackageRow = {
+  id: string;
+  warehouse_name: string;
+  status: string;
+  owner_status: string;
+  tracking_no: string | null;
+  weight_gram: number | null;
+  volume_cm3: number | null;
+  free_storage_until: string | null;
+  updated_at: string;
+};
+
+type ValueAddedServiceRow = {
+  id: string;
+  package_id: string;
+  service_type: string;
+  status: string;
+  fee_hkd: number | null;
+  created_at: string;
+};
+
+type AftersalesRequestRow = {
+  id: string;
+  member_id: string;
+  order_type: string;
+  order_id: string;
+  request_type: string;
+  status: string;
+  reason: string;
+  created_at: string;
+};
+
+type AdminProcurementQueueRow = {
+  id: string;
+  member_id: string;
+  platform: string;
+  title: string;
+  quantity: number;
+  status: string;
+  item_amount_jpy: number | null;
+  local_shipping_jpy: number | null;
+  service_fee_hkd: number | null;
+  updated_at: string;
+};
+
+type AdminInboundPackageQueueRow = {
+  id: string;
+  member_id: string | null;
+  warehouse_name: string;
+  status: string;
+  owner_status: string;
+  tracking_no: string | null;
+  weight_gram: number | null;
+  volume_cm3: number | null;
+  updated_at: string;
 };
 
 type WalletBalanceRow = {
@@ -645,9 +706,184 @@ export async function getMemberOrders(db: D1Database, memberId = "demo-member"):
       }))
     ].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
 
-    return orders.length > 0 ? orders : demoOrders;
+    return orders;
   } catch {
     return demoOrders;
+  }
+}
+
+export async function getMemberLedger(db: D1Database, memberId = "demo-member") {
+  try {
+    const ledger = await all<FinancialLedgerRow>(
+      db,
+      `SELECT id, bucket, direction, amount_hkd, amount_jpy, source_type, source_id, balance_after_hkd, note, created_at
+         FROM financial_ledger_entries
+        WHERE member_id = ?
+        ORDER BY created_at DESC
+        LIMIT 50`,
+      memberId
+    );
+
+    return {
+      items: ledger.map((entry) => ({
+        id: entry.id,
+        bucket: entry.bucket,
+        direction: entry.direction,
+        amountHkd: entry.amount_hkd,
+        amountJpy: entry.amount_jpy,
+        source: `${entry.source_type}:${entry.source_id}`,
+        balanceAfterHkd: entry.balance_after_hkd ?? null,
+        note: entry.note ?? null,
+        createdAt: entry.created_at
+      }))
+    };
+  } catch {
+    return { items: [] };
+  }
+}
+
+export async function getMemberPackages(db: D1Database, memberId = "demo-member") {
+  try {
+    const packages = await all<MemberPackageRow>(
+      db,
+      `SELECT inbound_packages.id,
+              warehouses.name AS warehouse_name,
+              inbound_packages.status,
+              inbound_packages.owner_status,
+              inbound_packages.tracking_no,
+              inbound_packages.weight_gram,
+              inbound_packages.volume_cm3,
+              inbound_packages.free_storage_until,
+              inbound_packages.updated_at
+         FROM inbound_packages
+         JOIN warehouses ON warehouses.id = inbound_packages.warehouse_id
+        WHERE inbound_packages.member_id = ?
+        ORDER BY inbound_packages.updated_at DESC
+        LIMIT 50`,
+      memberId
+    );
+    const packageIds = packages.map((item) => item.id);
+    const services = packageIds.length
+      ? await all<ValueAddedServiceRow>(
+          db,
+          `SELECT id, package_id, service_type, status, fee_hkd, created_at
+             FROM value_added_services
+            WHERE package_id IN (${packageIds.map(() => "?").join(",")})
+            ORDER BY created_at DESC`,
+          ...packageIds
+        )
+      : [];
+
+    return {
+      items: packages.map((item) => ({
+        id: item.id,
+        warehouse: item.warehouse_name,
+        status: item.status,
+        ownerStatus: item.owner_status,
+        trackingNo: item.tracking_no,
+        weightGram: item.weight_gram,
+        volumeCm3: item.volume_cm3,
+        freeStorageUntil: item.free_storage_until,
+        updatedAt: item.updated_at,
+        valueAddedServices: services
+          .filter((service) => service.package_id === item.id)
+          .map((service) => ({
+            id: service.id,
+            serviceType: service.service_type,
+            status: service.status,
+            feeHkd: service.fee_hkd,
+            createdAt: service.created_at
+          }))
+      }))
+    };
+  } catch {
+    return { items: [] };
+  }
+}
+
+export async function getMemberShipments(db: D1Database, memberId = "demo-member") {
+  try {
+    const shipments = await all<ShipmentRow>(
+      db,
+      `SELECT shipments.id,
+              shipments.member_id,
+              shipments.line_code,
+              shipments.status,
+              shipments.carton_fee_hkd,
+              shipments.freight_fee_hkd,
+              shipments.tracking_no,
+              shipments.updated_at,
+              COUNT(shipment_packages.package_id) AS package_count
+         FROM shipments
+         LEFT JOIN shipment_packages ON shipment_packages.shipment_id = shipments.id
+        WHERE shipments.member_id = ?
+        GROUP BY shipments.id
+        ORDER BY shipments.updated_at DESC
+        LIMIT 50`,
+      memberId
+    );
+    const shipmentIds = shipments.map((shipment) => shipment.id);
+    const trackingEvents = shipmentIds.length
+      ? await all<TrackingEventRow>(
+          db,
+          `SELECT id, shipment_id, status, location, description, occurred_at
+             FROM logistics_tracking_events
+            WHERE shipment_id IN (${shipmentIds.map(() => "?").join(",")})
+            ORDER BY occurred_at DESC`,
+          ...shipmentIds
+        )
+      : [];
+
+    return {
+      items: shipments.map((shipment) => ({
+        id: shipment.id,
+        lineCode: shipment.line_code,
+        status: shipment.status,
+        cartonFeeHkd: shipment.carton_fee_hkd,
+        freightFeeHkd: shipment.freight_fee_hkd,
+        trackingNo: shipment.tracking_no,
+        packageCount: shipment.package_count,
+        updatedAt: shipment.updated_at
+      })),
+      trackingEvents: trackingEvents.map((event) => ({
+        id: event.id,
+        shipmentId: event.shipment_id,
+        status: event.status,
+        location: event.location,
+        description: event.description,
+        occurredAt: event.occurred_at
+      }))
+    };
+  } catch {
+    return { items: [], trackingEvents: [] };
+  }
+}
+
+export async function getMemberTickets(db: D1Database, memberId = "demo-member") {
+  try {
+    const tickets = await all<SupportTicketRow>(
+      db,
+      `SELECT id, ticket_type, status, priority, subject, related_type, related_id, updated_at
+         FROM support_tickets
+        WHERE member_id = ?
+        ORDER BY updated_at DESC
+        LIMIT 50`,
+      memberId
+    );
+
+    return {
+      items: tickets.map((ticket) => ({
+        id: ticket.id,
+        type: ticket.ticket_type,
+        status: ticket.status,
+        priority: ticket.priority,
+        subject: ticket.subject,
+        related: ticket.related_type && ticket.related_id ? `${ticket.related_type}:${ticket.related_id}` : null,
+        updatedAt: ticket.updated_at
+      }))
+    };
+  } catch {
+    return { items: [] };
   }
 }
 
@@ -902,6 +1138,59 @@ export async function getAdminWorkQueue(db: D1Database) {
         ORDER BY occurred_at DESC
         LIMIT 10`
     );
+    const procurementOrders = await all<AdminProcurementQueueRow>(
+      db,
+      `SELECT id,
+              member_id,
+              platform,
+              title,
+              quantity,
+              status,
+              item_amount_jpy,
+              local_shipping_jpy,
+              service_fee_hkd,
+              updated_at
+         FROM procurement_orders
+        ORDER BY updated_at DESC
+        LIMIT 20`
+    );
+    const paymentRequests = await all<PaymentRequestRow>(
+      db,
+      `SELECT id, member_id, amount_hkd, status, proof_url, created_at
+         FROM payment_requests
+        ORDER BY created_at DESC
+        LIMIT 20`
+    );
+    const inboundPackages = await all<AdminInboundPackageQueueRow>(
+      db,
+      `SELECT inbound_packages.id,
+              inbound_packages.member_id,
+              warehouses.name AS warehouse_name,
+              inbound_packages.status,
+              inbound_packages.owner_status,
+              inbound_packages.tracking_no,
+              inbound_packages.weight_gram,
+              inbound_packages.volume_cm3,
+              inbound_packages.updated_at
+         FROM inbound_packages
+         JOIN warehouses ON warehouses.id = inbound_packages.warehouse_id
+        ORDER BY inbound_packages.updated_at DESC
+        LIMIT 20`
+    );
+    const aftersales = await all<AftersalesRequestRow>(
+      db,
+      `SELECT id, member_id, order_type, order_id, request_type, status, reason, created_at
+         FROM aftersales_requests
+        ORDER BY created_at DESC
+        LIMIT 20`
+    );
+    const valueAddedServices = await all<ValueAddedServiceRow>(
+      db,
+      `SELECT id, package_id, service_type, status, fee_hkd, created_at
+         FROM value_added_services
+        ORDER BY created_at DESC
+        LIMIT 20`
+    );
 
     return {
       tickets: tickets.map((ticket) => ({
@@ -958,6 +1247,55 @@ export async function getAdminWorkQueue(db: D1Database) {
         location: event.location,
         description: event.description,
         occurredAt: event.occurred_at
+      })),
+      procurementOrders: procurementOrders.map((order) => ({
+        id: order.id,
+        memberId: order.member_id,
+        platform: order.platform,
+        title: order.title,
+        quantity: order.quantity,
+        status: order.status,
+        itemAmountJpy: order.item_amount_jpy,
+        localShippingJpy: order.local_shipping_jpy,
+        serviceFeeHkd: order.service_fee_hkd,
+        updatedAt: order.updated_at
+      })),
+      paymentRequests: paymentRequests.map((payment) => ({
+        id: payment.id,
+        memberId: payment.member_id,
+        amountHkd: payment.amount_hkd,
+        status: payment.status,
+        proofUrl: payment.proof_url ?? null,
+        createdAt: payment.created_at ?? null
+      })),
+      inboundPackages: inboundPackages.map((item) => ({
+        id: item.id,
+        memberId: item.member_id,
+        warehouse: item.warehouse_name,
+        status: item.status,
+        ownerStatus: item.owner_status,
+        trackingNo: item.tracking_no,
+        weightGram: item.weight_gram,
+        volumeCm3: item.volume_cm3,
+        updatedAt: item.updated_at
+      })),
+      aftersales: aftersales.map((request) => ({
+        id: request.id,
+        memberId: request.member_id,
+        orderType: request.order_type,
+        orderId: request.order_id,
+        requestType: request.request_type,
+        status: request.status,
+        reason: request.reason,
+        createdAt: request.created_at
+      })),
+      valueAddedServices: valueAddedServices.map((service) => ({
+        id: service.id,
+        packageId: service.package_id,
+        serviceType: service.service_type,
+        status: service.status,
+        feeHkd: service.fee_hkd,
+        createdAt: service.created_at
       }))
     };
   } catch {
@@ -967,7 +1305,12 @@ export async function getAdminWorkQueue(db: D1Database) {
       ledger: [],
       seo: [],
       shipments: [],
-      trackingEvents: []
+      trackingEvents: [],
+      procurementOrders: [],
+      paymentRequests: [],
+      inboundPackages: [],
+      aftersales: [],
+      valueAddedServices: []
     };
   }
 }
