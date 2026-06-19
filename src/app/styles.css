@@ -1,15 +1,15 @@
 :root {
   color: #162033;
   background: #eef5fb;
-  --dp-ink: #132033;
+  --dp-ink: #173052;
   --dp-muted: #64748b;
   --dp-line: #dbe7f1;
   --dp-soft: #f5f9fc;
   --dp-card: rgba(255, 255, 255, 0.92);
-  --dp-cyan: #12b8df;
-  --dp-blue: #2867f0;
+  --dp-cyan: #0e9cff;
+  --dp-blue: #0877e8;
   --dp-green: #11b981;
-  --dp-orange: #f59e0b;
+  --dp-orange: #ff8500;
   --dp-shadow: 0 22px 55px rgba(35, 60, 94, 0.12);
   font-family:
     Inter, "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", Arial, sans-serif;
@@ -40,8 +40,8 @@ button {
 .consumer-shell {
   min-height: 100vh;
   background:
-    linear-gradient(135deg, rgba(18, 184, 223, 0.13), transparent 30%),
-    radial-gradient(circle at 82% 6%, rgba(40, 103, 240, 0.12), transparent 28%),
+    linear-gradient(135deg, rgba(14, 156, 255, 0.14), transparent 30%),
+    radial-gradient(circle at 82% 6%, rgba(255, 133, 0, 0.1), transparent 28%),
     #eef5fb;
 }
 
@@ -53,7 +53,7 @@ button {
 .consumer-header {
   height: 88px;
   display: grid;
-  grid-template-columns: 140px 360px minmax(360px, 1fr) auto;
+  grid-template-columns: 132px 320px minmax(360px, 1fr) auto;
   gap: 20px;
   align-items: center;
   background: rgba(255, 255, 255, 0.86);
@@ -77,21 +77,12 @@ button {
   padding: 0;
 }
 
-.logo-badge {
-  width: 48px;
-  height: 48px;
-  display: grid;
-  place-items: center;
-  color: #ffffff;
-  background: linear-gradient(135deg, var(--dp-cyan), var(--dp-blue));
-  border-radius: 14px;
-  box-shadow: 0 12px 28px rgba(18, 184, 223, 0.24);
-  font-weight: 900;
-}
-
-.consumer-brand strong {
-  font-size: 22px;
-  white-space: nowrap;
+.brand-logo-main {
+  width: 104px;
+  height: 78px;
+  display: block;
+  object-fit: contain;
+  object-position: left center;
 }
 
 .market-tabs {
@@ -114,7 +105,7 @@ button {
 .market-tabs button.active {
   background: linear-gradient(135deg, var(--dp-cyan), var(--dp-blue));
   color: #ffffff;
-  box-shadow: 0 14px 26px rgba(18, 184, 223, 0.24);
+  box-shadow: 0 14px 26px rgba(14, 156, 255, 0.24);
 }
 
 .search-bar {
@@ -146,7 +137,7 @@ button {
 .search-bar button {
   height: 100%;
   border: 0;
-  background: var(--dp-ink);
+  background: linear-gradient(135deg, var(--dp-blue), #0056c8);
   color: #ffffff;
   font-weight: 800;
   font-size: 17px;
@@ -184,16 +175,16 @@ button {
 }
 
 .home-hero {
-  min-height: 176px;
+  min-height: 210px;
   display: grid;
-  grid-template-columns: minmax(280px, 0.8fr) 1fr;
-  align-items: end;
+  grid-template-columns: minmax(360px, 0.95fr) 1fr;
+  align-items: center;
   gap: 24px;
   padding: 0 42px 20px;
   background:
-    radial-gradient(circle at 84% 50%, rgba(255, 192, 96, 0.55), transparent 16%),
-    radial-gradient(circle at 70% 58%, rgba(16, 184, 223, 0.28), transparent 18%),
-    linear-gradient(180deg, #c7f2ff 0%, #e9fbff 100%);
+    radial-gradient(circle at 84% 50%, rgba(255, 133, 0, 0.34), transparent 18%),
+    radial-gradient(circle at 70% 58%, rgba(14, 156, 255, 0.25), transparent 20%),
+    linear-gradient(180deg, #dff3ff 0%, #f4fbff 100%);
 }
 
 .hero-character {
@@ -203,17 +194,12 @@ button {
   min-height: 136px;
 }
 
-.hero-mascot {
-  width: 104px;
-  height: 104px;
-  display: grid;
-  place-items: center;
-  border-radius: 52px;
-  background: #12b8df;
-  color: #ffffff;
-  font-size: 30px;
-  font-weight: 900;
-  box-shadow: 0 18px 40px rgba(18, 184, 223, 0.28);
+.hero-logo {
+  width: 190px;
+  height: 150px;
+  display: block;
+  object-fit: contain;
+  filter: drop-shadow(0 18px 22px rgba(8, 119, 232, 0.18));
 }
 
 .hero-character strong {
@@ -236,7 +222,7 @@ button {
   border-radius: 12px 12px 28px 28px;
   color: #ffffff;
   font-weight: 900;
-  background: #12b8df;
+  background: linear-gradient(135deg, var(--dp-blue), var(--dp-cyan));
   transform: rotate(-6deg);
 }
 
@@ -347,7 +333,7 @@ button {
   place-items: center;
   border-radius: 17px;
   background: #f1f6f8;
-  color: #12b8df;
+  color: var(--dp-blue);
   font-weight: 900;
 }
 
@@ -469,6 +455,15 @@ button {
   line-height: 2;
 }
 
+.footer-logo {
+  width: 138px;
+  height: 92px;
+  display: block;
+  object-fit: contain;
+  object-position: left center;
+  margin-bottom: 10px;
+}
+
 .consumer-body {
   display: grid;
   grid-template-columns: 270px minmax(0, 1fr);
@@ -532,8 +527,8 @@ button {
 }
 
 .group-items button.active {
-  background: linear-gradient(135deg, rgba(18, 184, 223, 0.16), rgba(40, 103, 240, 0.11));
-  color: #0f4562;
+  background: linear-gradient(135deg, rgba(14, 156, 255, 0.16), rgba(255, 133, 0, 0.1));
+  color: #0b4b91;
   box-shadow: inset 3px 0 0 var(--dp-cyan);
 }
 
@@ -551,8 +546,8 @@ button {
   gap: 24px;
   align-items: center;
   background:
-    linear-gradient(135deg, rgba(19, 32, 51, 0.96), rgba(27, 75, 116, 0.9)),
-    radial-gradient(circle at 18% 0%, rgba(18, 184, 223, 0.45), transparent 26%);
+    linear-gradient(135deg, rgba(11, 58, 116, 0.96), rgba(8, 119, 232, 0.82)),
+    radial-gradient(circle at 92% 12%, rgba(255, 133, 0, 0.3), transparent 28%);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 24px;
   box-shadow: var(--dp-shadow);
@@ -597,9 +592,9 @@ button {
 }
 
 .profile-tags .orange {
-  color: #ffd893;
-  border: 1px solid rgba(255, 216, 147, 0.72);
-  background: rgba(245, 158, 11, 0.12);
+  color: #ffe2b7;
+  border: 1px solid rgba(255, 226, 183, 0.72);
+  background: rgba(255, 133, 0, 0.14);
 }
 
 .profile-tags .level {
@@ -633,7 +628,7 @@ button {
   height: 40px;
   border: 0;
   border-radius: 12px;
-  background: linear-gradient(135deg, var(--dp-orange), #fb7185);
+  background: linear-gradient(135deg, var(--dp-orange), #ffb000);
   color: #ffffff;
   font-weight: 800;
   font-size: 17px;
@@ -814,7 +809,7 @@ button {
 .form-grid button {
   border: 0;
   border-radius: 8px;
-  background: #12b8df;
+  background: linear-gradient(135deg, var(--dp-cyan), var(--dp-blue));
   color: #ffffff;
   min-height: 40px;
   padding: 0 12px;
@@ -1139,15 +1134,13 @@ button {
   gap: 12px;
 }
 
-.brand-mark {
-  width: 42px;
-  height: 42px;
-  display: grid;
-  place-items: center;
-  background: #35c0a1;
-  color: #09243b;
-  font-weight: 800;
-  border-radius: 8px;
+.brand-logo {
+  width: 54px;
+  height: 54px;
+  object-fit: contain;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.18);
 }
 
 .brand strong,
@@ -1378,7 +1371,7 @@ h2 {
 
 @media (max-width: 1320px) {
   .consumer-header {
-    grid-template-columns: 130px 260px minmax(280px, 1fr);
+    grid-template-columns: 126px 260px minmax(280px, 1fr);
   }
 
   .header-tools {
@@ -1400,6 +1393,11 @@ h2 {
     height: auto;
     grid-template-columns: 1fr;
     padding: 16px;
+  }
+
+  .brand-logo-main {
+    width: 96px;
+    height: 72px;
   }
 
   .consumer-body {
@@ -1483,8 +1481,9 @@ h2 {
 }
 
 @media (max-width: 620px) {
-  .consumer-brand strong {
-    font-size: 18px;
+  .brand-logo-main {
+    width: 82px;
+    height: 64px;
   }
 
   .market-tabs {
@@ -1504,9 +1503,9 @@ h2 {
     padding: 18px 16px;
   }
 
-  .hero-mascot {
-    width: 84px;
-    height: 84px;
+  .hero-logo {
+    width: 132px;
+    height: 104px;
   }
 
   .promo-card h1 {

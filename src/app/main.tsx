@@ -38,6 +38,7 @@ import {
   type MemberOrder,
   type Metric
 } from "../shared/domain";
+import droppilotLogo from "./assets/droppilot-logo.png";
 import "./styles.css";
 
 type AppMode = "home" | "member" | "admin";
@@ -296,7 +297,7 @@ function App() {
   return (
     <main className="shell admin-shell">
       <aside className="sidebar" aria-label="管理後台導航">
-        <div className="brand"><span className="brand-mark">D</span><div><strong>DropPilot</strong><small>管理後台</small></div></div>
+        <div className="brand"><img className="brand-logo" src={droppilotLogo} alt="DropPilot" /><div><strong>DropPilot</strong><small>管理後台</small></div></div>
         <div className="mode-switch" aria-label="切換使用端">
           <button onClick={() => switchMode("home")} type="button">首頁</button>
           <button onClick={() => switchMode("member")} type="button">會員前台</button>
@@ -322,7 +323,7 @@ function App() {
 function ConsumerHeader({ onHome, onModeChange, onUserCenter }: { onHome: () => void; onModeChange: () => void; onUserCenter: () => void }) {
   return (
     <header className="consumer-header">
-      <button className="consumer-brand" onClick={onHome} type="button"><span className="logo-badge">DP</span><strong>DropPilot</strong></button>
+      <button aria-label="DropPilot 首頁" className="consumer-brand" onClick={onHome} type="button"><img className="brand-logo-main" src={droppilotLogo} alt="DropPilot" /></button>
       <nav className="market-tabs"><button className="active" onClick={onHome} type="button">日本海淘</button><button onClick={onHome} type="button">煤爐商品購買</button></nav>
       <div className="search-bar"><Search size={22} /><input placeholder="商品搜索" /><button type="button">搜索</button></div>
       <div className="header-tools">
@@ -339,7 +340,7 @@ function ConsumerHeader({ onHome, onModeChange, onUserCenter }: { onHome: () => 
 function HomePage() {
   return (
     <section className="home-page">
-      <section className="home-hero"><div className="hero-character"><span className="hero-mascot">DP</span><strong>日本代購與集運</strong></div><div className="hero-shopping"><span>JP</span><span>HK</span><span>UK</span></div></section>
+      <section className="home-hero"><div className="hero-character"><img className="hero-logo" src={droppilotLogo} alt="DropPilot" /><strong>日本代購與集運</strong></div><div className="hero-shopping"><span>JP</span><span>HK</span><span>UK</span></div></section>
       <section className="home-top-grid">
         <article className="promo-card"><div><p>提供豐富的產品優惠信息</p><h1>專業的海淘平台</h1><span>DropPilot 是一站式跨境海淘商城，為用戶提供便捷的全流程代購與集運服務。</span></div></article>
         <article className="platform-card">{marketplacePlatforms.map((name) => <button key={name} type="button"><strong>{name}</strong><span>{name.toUpperCase()}</span></button>)}</article>
@@ -368,7 +369,7 @@ function ProductCard({ title, price, image }: { title: string; price: string; im
 
 function HomeFooter() {
   const groups = [["關於 DropPilot", "什麼是 DropPilot", "新手指引", "常見問題"], ["購物指南", "購物指南", "物流相關", "退貨及退款"], ["資費說明", "費用構成", "日本郵政", "支付方式"], ["公司信息", "公司介紹", "聯繫我們", "人才招聘"]];
-  return <footer className="home-footer">{groups.map(([title, ...items]) => <div key={title}><h3>{title}</h3>{items.map((item) => <span key={item}>{item}</span>)}</div>)}<div className="footer-contact"><h3>聯繫我們</h3><strong>DropPilot</strong><span>電話：03-6912-6673</span><span>郵箱：info@droppilot.net</span></div></footer>;
+  return <footer className="home-footer">{groups.map(([title, ...items]) => <div key={title}><h3>{title}</h3>{items.map((item) => <span key={item}>{item}</span>)}</div>)}<div className="footer-contact"><img className="footer-logo" src={droppilotLogo} alt="DropPilot" /><h3>聯繫我們</h3><strong>DropPilot</strong><span>電話：03-6912-6673</span><span>郵箱：info@droppilot.net</span></div></footer>;
 }
 
 function MemberSidebar({ activeMenu, onSelect }: { activeMenu: string; onSelect: (id: string) => void }) {
