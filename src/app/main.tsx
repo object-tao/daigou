@@ -376,7 +376,7 @@ function MemberSidebar({ activeMenu, onSelect }: { activeMenu: string; onSelect:
 }
 
 function MemberProfileCard() {
-  return <section className="member-profile-card"><div className="banner-slot">Banner</div><div className="profile-main"><h2>18126257826</h2><div className="profile-tags"><span className="green">ID：V057448</span><span className="orange">標識：DPHK</span><span className="level">晶輝會員</span></div></div><div className="balance-box"><div><span>帳戶餘額</span><strong>HKD 0</strong></div><button type="button">去充值</button></div><div className="points-box"><span>積分</span><strong>0</strong></div></section>;
+  return <section className="member-profile-card"><div className="profile-main"><span className="profile-kicker">會員中心</span><h2>18126257826</h2><div className="profile-tags"><span className="green">ID：V057448</span><span className="orange">標識：DPHK</span><span className="level">晶輝會員</span></div></div><div className="balance-box"><div><span>帳戶餘額</span><strong>HKD 0</strong></div><button type="button">去充值</button></div><div className="points-box"><span>積分</span><strong>0</strong></div></section>;
 }
 
 function RightRail() {
