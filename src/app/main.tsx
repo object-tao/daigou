@@ -471,6 +471,19 @@ function ProcurementRequestPage({
 }) {
   return (
     <section className="procurement-panel">
+      <div className="procurement-hero">
+        <div>
+          <span>Proxy Purchase</span>
+          <h2>提交日本代購需求</h2>
+          <p>貼上商品連結，補充規格與數量；客服報價確認後再付款採購。</p>
+        </div>
+        <div className="procurement-steps" aria-label="代購流程">
+          <strong>提交</strong>
+          <strong>報價</strong>
+          <strong>付款</strong>
+          <strong>採購</strong>
+        </div>
+      </div>
       <form className="procurement-form" onSubmit={onSubmit("/api/procurement/orders", "提交代購...", (result) => `代購單已建立：${result.id}`)}>
         <div className="procurement-column">
           <ProcurementField label="商品鏈接" required>
@@ -503,6 +516,10 @@ function ProcurementRequestPage({
           <p className="procurement-warning procurement-footnote">* 如果下單時產生支付手續費和運費另算。</p>
         </div>
         <div className="procurement-column procurement-column-right">
+          <div className="procurement-side-note">
+            <strong>費用提示</strong>
+            <span>日本國內運費採購後補，支付手續費與特殊服務費會由客服另行確認。</span>
+          </div>
           <ProcurementField label="商品品名" required>
             <input name="title" placeholder="請輸入商品品名" required />
           </ProcurementField>
