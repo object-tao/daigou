@@ -3,6 +3,22 @@
   "name": "droppilot-procurement",
   "main": "src/worker/index.ts",
   "compatibility_date": "2026-06-25",
+  "workers_dev": true,
+  "preview_urls": true,
+  "routes": [
+    {
+      "pattern": "droppilot.net",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.droppilot.net",
+      "custom_domain": true
+    },
+    {
+      "pattern": "admin.droppilot.net",
+      "custom_domain": true
+    }
+  ],
   "assets": {
     "directory": "./dist/client",
     "binding": "ASSETS",
@@ -12,7 +28,7 @@
     {
       "binding": "DB",
       "database_name": "droppilot-db",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "eb837ac8-ea6f-49ac-a8d4-6286868631b3",
       "migrations_dir": "migrations"
     }
   ]

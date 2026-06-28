@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS procurement_orders (
   title TEXT NOT NULL,
   spec TEXT,
   quantity INTEGER NOT NULL DEFAULT 1,
-  status TEXT NOT NULL DEFAULT 'pending_quote',
+  status TEXT NOT NULL DEFAULT 'pending_payment',
   item_amount_jpy INTEGER,
   local_shipping_jpy INTEGER,
   service_fee_hkd INTEGER,
