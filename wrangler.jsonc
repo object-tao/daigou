@@ -17,6 +17,10 @@
     {
       "pattern": "admin.droppilot.net",
       "custom_domain": true
+    },
+    {
+      "pattern": "store.droppilot.net",
+      "custom_domain": true
     }
   ],
   "assets": {
